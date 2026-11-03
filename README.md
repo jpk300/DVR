@@ -14,6 +14,7 @@ A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.c
 - **Automatic daily cleanup** at a time you choose, with a safety cap
 - **Settings tab** to change the DVR address from the browser, with a connection test
 - Dark UI inspired by the HDHomeRun app's own Tasks screen
+- Loads each show's recordings in parallel (bounded), with short-lived caching, timeouts, and per-show error handling so one failing show doesn't break the list
 - Runs as one small Docker container
 
 ## Quick start
@@ -23,11 +24,12 @@ Requires Docker with Compose.
 ```bash
 git clone https://github.com/YOUR-USERNAME/hdhr-dvr-manager.git
 cd hdhr-dvr-manager
-# edit docker-compose.yml: set DVR_HOST (or set it later in the Settings tab)
 docker compose up -d --build
 ```
 
 Open `http://localhost:8080` (or `http://<server-ip>:8080` if it runs on another machine).
+
+Open the **Settings** tab and enter your DVR's IP address, then use **Test connection** and **Save & apply**.
 
 Your keep limits and settings are stored in `./data` (mounted into the container), so they survive rebuilds.
 
@@ -38,6 +40,7 @@ Set these under `environment:` in `docker-compose.yml`.
 | Variable | Default | What it does |
 |---|---|---|
 | `DVR_HOST` | none | IP or hostname of your DVR. Can also be set from the Settings tab, which takes priority. |
+| `DVR_ALLOWED_NETWORKS` | private ranges only | Extra CIDR ranges the DVR may live on, comma-separated (for example `100.64.0.0/10` for Tailscale). By default only `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` and IPv6 `fc00::/7` are allowed. |
 | `DVR_STORAGE_URL` | none | Point straight at the record engine's `recorded_files.json` instead of using `DVR_HOST`. |
 | `DEVICE_AUTH` | read from the DVR | Override the DeviceAuth used to look up recording rules. Join the strings together if you have several tuners. |
 | `APP_USER` / `APP_PASS` | none | Optional HTTP basic auth for the whole app. |
@@ -76,7 +79,10 @@ The DVR doesn't report per-recording file sizes, so "Used on drive" is total spa
 
 - The app can delete recordings and change which device it talks to. Keep it on your home network.
 - If you expose it beyond your LAN, put it behind a reverse proxy with HTTPS and set `APP_USER` / `APP_PASS`.
-- The delete endpoint only accepts URLs on the configured DVR's host.
+- **Deletes are checked on the server.** The browser only names recordings. The server re-reads the DVR's current list and deletes a recording only if its URL appears in that fresh list, and the URL must also be plain `http://`, carry no credentials, point at the same host and port as the DVR, and have the path `/recorded/cmd`. Anything else is refused.
+- **The DVR must be on a private network.** Every address the DVR hostname resolves to must be in an allowed range (see `DVR_ALLOWED_NETWORKS`), so the app can't be pointed at the internet or at a loopback/link-local address such as a cloud metadata service.
+- **DNS and redirects are handled.** The app resolves the hostname itself, connects to that exact validated IP (so a DNS change between check and use can't redirect it), never follows HTTP redirects, ignores proxy environment variables for DVR traffic, and caps response sizes and request time.
+- URLs inside DVR responses (episode lists, delete commands) are validated the same way before they are used, and images are only shown if their URL is `http(s)`.
 - Your DVR's `DeviceAuth` is a credential for Silicondust's cloud services. `/api/debug` strips it, but don't paste raw DVR data publicly.
 
 ## Troubleshooting

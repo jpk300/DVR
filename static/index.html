@@ -161,7 +161,7 @@
     <h2>DVR connection</h2>
     <p class="help">The IP address or hostname of your HDHomeRun DVR. Changes apply immediately, with no restart.</p>
     <label for="host">DVR IP address or hostname</label>
-    <input type="text" id="host" placeholder="192.168.1.130" autocomplete="off" spellcheck="false">
+    <input type="text" id="host" placeholder="192.168.1.50" autocomplete="off" spellcheck="false">
     <p class="help" id="hostSrc" style="margin-top:.6rem"></p>
     <div class="btns">
       <button class="btn" id="host-test">Test connection</button>
@@ -257,7 +257,8 @@ function renderList() {
   if (!rows.length) list.append(el("div", "empty", data.length ? "No shows match your search." : "No shows yet."));
   for (const s of rows) {
     const row = el("div", "row" + (key(s) === current ? " sel" : ""));
-    const cnt = el("div", "cnt", s.Episodes.length);
+    const cnt = el("div", "cnt", s.Error ? "!" : s.Episodes.length);
+    if (s.Error) cnt.title = s.Error;
     const ttl = el("div", "ttl", s.Title || "(untitled)");
     const cell = el("div", "cell"); fillCell(cell, s);
     cell.title = "Click to set how many recordings to keep";
@@ -271,7 +272,7 @@ function renderList() {
 /* ---------- panel (left) ---------- */
 function globalButtons() {
   const box = el("div", "gbtns");
-  const refresh = el("button", "gbtn", "Refresh"); refresh.onclick = load;
+  const refresh = el("button", "gbtn", "Refresh"); refresh.onclick = () => load(true);
   const prune = el("button", "gbtn", "Apply keep limits"); prune.onclick = doPrune;
   box.append(refresh, prune);
   return box;
@@ -290,7 +291,8 @@ function renderPanel() {
 
   const eps = [...s.Episodes].sort((a, b) => (b.StartTime || 0) - (a.StartTime || 0));
   const syn = eps.find(e => e.Synopsis);
-  p.append(el("p", "syn", syn ? syn.Synopsis : (eps.length ? "" : "Scheduled to record. No recordings yet.")));
+  p.append(el("p", "syn", s.Error ? `Couldn't load this show's recordings (${s.Error}). Try Refresh.` :
+    syn ? syn.Synopsis : (eps.length ? "" : "Scheduled to record. No recordings yet.")));
 
   const hd = el("div", "hd"); hd.append(el("span", null, plural(eps.length, "recording")));
   if (eps.length) {
@@ -345,9 +347,9 @@ function renderInfo() {
 }
 
 /* ---------- actions ---------- */
-async function load() {
+async function load(fresh = true) {
   status("Loading…"); selected.clear();
-  const [r, lr] = await Promise.all([fetch("api/recordings"), fetch("api/limits")]);
+  const [r, lr] = await Promise.all([fetch(fresh ? "api/recordings?fresh=1" : "api/recordings"), fetch("api/limits")]);
   const j = await r.json();
   if (!r.ok) { status("Error: " + j.error); return; }
   const lj = await lr.json();
@@ -357,7 +359,9 @@ async function load() {
     freeBytes = sr.ok ? sj.free : null; totalBytes = sr.ok ? sj.total : null;
   } catch (e) { freeBytes = totalBytes = null; }
   if (!data.some(s => key(s) === current)) current = visibleShows().length ? key(visibleShows()[0]) : null;
-  status(""); renderInfo(); renderList(); renderPanel();
+  const bad = data.filter(s => s.Error).length;
+  status(bad ? `${bad} show${bad === 1 ? "" : "s"} couldn't be loaded. Try Refresh.` : "");
+  renderInfo(); renderList(); renderPanel();
 }
 
 async function doDelete() {
@@ -460,7 +464,7 @@ $("host").onkeydown = e => { if (e.key === "Enter") submitHost("save"); };
 $("sidebtns").append(globalButtons());
 $("topbtns").append(globalButtons());
 $("mclose").onclick = () => document.body.classList.remove("sheet-open");
-load();
+load(false);
 </script>
 </body>
 </html>

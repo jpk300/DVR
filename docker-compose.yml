@@ -6,11 +6,13 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/data          # stores your keep limits and settings (limits.json, settings.json)
-    environment:
-      # First-run default for the DVR address. You can change it later in the app's Settings tab.
-      DVR_HOST: "192.168.1.130"
-      # The daily cleanup schedule, timezone and safety cap are set in the app's Settings tab.
+      - ./data:/data          # your keep limits and settings (limits.json, settings.json); not committed to git
+    environment: {}
+      # Set your DVR's address in the app's Settings tab. Optionally give it a first-run default here:
+      # DVR_HOST: "192.168.1.50"
+      # The DVR must be on a private network (10.x, 172.16-31.x, 192.168.x). To allow another range,
+      # for example Tailscale, list it here:
+      # DVR_ALLOWED_NETWORKS: "100.64.0.0/10"
       # Optional basic auth:
       # APP_USER: "admin"
       # APP_PASS: "change-me"
