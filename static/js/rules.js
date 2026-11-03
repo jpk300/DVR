@@ -1,6 +1,7 @@
 // @ts-check
 // Keep rules. toDelete() is the same logic as dvr/pruning.py, used for counts and previews;
-// the server's plan is what is actually deleted.
+// the server's plan is what is actually deleted. Protected recordings are set aside first:
+// they are never deleted and don't count toward the rule's N.
 /** @typedef {import("./types.js").Episode} Episode */
 /** @typedef {import("./types.js").Rule} Rule */
 /** @typedef {import("./types.js").Show} Show */
@@ -26,7 +27,7 @@ export function ruleText(rule, short = false) {
  */
 export function toDelete(episodes, rule) {
   if (!rule) return [];
-  let eps = [...episodes].sort((a, b) => (b.StartTime || 0) - (a.StartTime || 0));
+  let eps = episodes.filter(e => !e.Protected).sort((a, b) => (b.StartTime || 0) - (a.StartTime || 0));
   /** @type {Episode[]} */
   const out = [];
   if (rule.delete_watched) {

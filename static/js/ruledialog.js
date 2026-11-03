@@ -60,9 +60,11 @@ function updateEffect() {
   if (error) { eff.textContent = ""; return; }
   if (!s.Episodes.length) { eff.textContent = "No recordings yet. The rule applies once this show has some."; return; }
   const n = toDelete(s.Episodes, rule ?? null).length;
-  eff.textContent = n
+  const prot = s.Episodes.filter(e => e.Protected).length;
+  eff.textContent = (n
     ? `With this rule, ${plural(n, "recording")} of ${s.Episodes.length} would be deleted the next time keep rules are applied.`
-    : `With this rule, nothing would be deleted right now (${plural(s.Episodes.length, "recording")}).`;
+    : `With this rule, nothing would be deleted right now (${plural(s.Episodes.length, "recording")}).`) +
+    (prot ? ` ${prot} protected ${prot === 1 ? "recording is" : "recordings are"} never deleted and ${prot === 1 ? "doesn't" : "don't"} count toward the rule.` : "");
 }
 
 /** @param {Show} s @param {Rule | null} rule */

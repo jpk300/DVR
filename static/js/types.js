@@ -4,6 +4,8 @@
 /**
  * @typedef {object} Episode
  * @property {string} CmdURL
+ * @property {string} Key                 stable id (program + air time), used for protection
+ * @property {boolean} [Protected]        protected recordings are never deleted
  * @property {string} [ProgramID]
  * @property {string} [Title]
  * @property {string} [EpisodeTitle]

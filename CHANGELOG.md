@@ -7,6 +7,9 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 ## [Unreleased]
 
 ### Added
+- **Protect recordings**: a lock button on each recording. Protected recordings can't be deleted by hand,
+  by keep rules or by the automatic cleanup (the server refuses, not just the page). They don't count
+  toward a rule's N. Stored in `data/protected.json` by program and air time; `POST /api/protect`.
 - CI (GitHub Actions): ruff, an app start-up check, ESLint, a JSDoc type check, and a Docker build.
 - A damaged `settings.json`, `limits.json` or `last_run.json` no longer breaks the app: it is renamed to
   `<name>.corrupt-<timestamp>`, an error is logged, and defaults are used.
