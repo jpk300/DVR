@@ -7,6 +7,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from functools import lru_cache
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from zoneinfo import ZoneInfo, available_timezones
 
@@ -15,6 +16,7 @@ from flask import Flask, jsonify, request, Response
 from requests.adapters import HTTPAdapter
 
 app = Flask(__name__, static_folder="static", static_url_path="/static")
+app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024  # request bodies are small JSON; refuse anything bigger
 
 APP_USER = os.environ.get("APP_USER")
 APP_PASS = os.environ.get("APP_PASS")
@@ -443,12 +445,23 @@ def build_plan(series, limits):
     return plan
 
 
-def run_prune(max_deletes=None):
+class PlanChanged(Exception):
+    """The fresh prune plan no longer matches the one the user confirmed."""
+    def __init__(self, plan):
+        super().__init__("plan changed")
+        self.plan = plan
+
+
+def run_prune(max_deletes=None, confirmed=None):
     """Delete recordings beyond each show's limit. Returns (plan, results);
-    results is None if the run was skipped for exceeding max_deletes."""
+    results is None if the run was skipped for exceeding max_deletes.
+    If `confirmed` is given (the CmdURLs the user reviewed), the fresh plan must match it
+    exactly, otherwise PlanChanged is raised and nothing is deleted."""
     with _lock:
         plan = build_plan(fetch_series(), load_limits())
         urls = [e["CmdURL"] for g in plan for e in g["Episodes"] if e.get("CmdURL")]
+        if confirmed is not None and set(urls) != set(confirmed):
+            raise PlanChanged(plan)
         if max_deletes and len(urls) > max_deletes:
             return plan, None
         # the URLs came from the fresh listing above, so they are the allowed set
@@ -605,9 +618,18 @@ def prune_preview():
 
 @app.post("/api/prune")
 def prune_now():
+    """Run the prune the user reviewed. The body must list the exact CmdURLs from the preview;
+    if the DVR's recordings changed since then, nothing is deleted and the new plan is returned."""
+    body = request.get_json(silent=True)
+    urls = body.get("cmd_urls") if isinstance(body, dict) else None
+    if not isinstance(urls, list) or not urls or not all(isinstance(u, str) for u in urls):
+        return jsonify({"error": "Preview the keep limits first, then confirm the list"}), 400
     try:
-        plan, results = run_prune()
+        plan, results = run_prune(confirmed=urls)
         return jsonify({"plan": plan, "results": results})
+    except PlanChanged as e:
+        return jsonify({"error": "The recordings changed since you reviewed them. Review the updated list.",
+                        "plan": e.plan}), 409
     except Exception as e:
         return jsonify({"error": friendly(e)}), 502
 
@@ -661,8 +683,21 @@ def get_settings():
         "source": "ui" if saved else "env" if env else "none",
         "env_dvr_host": env,
         "schedule": schedule_config(),
-        "timezones": sorted(available_timezones()),
     })
+
+
+@lru_cache(maxsize=1)
+def timezone_names():
+    return sorted(available_timezones())
+
+
+@app.get("/api/timezones")
+def timezones():
+    """The timezone list never changes while the app runs, so browsers may cache it for a day."""
+    resp = jsonify(timezone_names())
+    resp.cache_control.private = True
+    resp.cache_control.max_age = 86400
+    return resp
 
 
 def _check_host_from_request():
