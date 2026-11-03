@@ -1,0 +1,99 @@
+# HDHomeRun DVR Manager
+
+A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.com/hdhomerun.html) DVR. Set how many recordings to keep of each show, delete recordings from a browser, and let the oldest ones clear out automatically once a day.
+
+> Unofficial. Not affiliated with or endorsed by Silicondust. Deleting a recording is permanent, so try it on a throwaway recording first.
+
+## Features
+
+- Browse every show and its recordings, with posters, synopses, and used / free disk space
+- Delete one or many recordings, with an optional **re-record** flag
+- **Per-show keep limits**: "keep the latest N recordings of this show"
+- Limits can be set for shows that are **scheduled but have no recordings yet**
+- **Apply keep limits** button with a preview and confirmation before anything is deleted
+- **Automatic daily cleanup** at a time you choose, with a safety cap
+- **Settings tab** to change the DVR address from the browser, with a connection test
+- Dark UI inspired by the HDHomeRun app's own Tasks screen
+- Runs as one small Docker container
+
+## Quick start
+
+Requires Docker with Compose.
+
+```bash
+git clone https://github.com/YOUR-USERNAME/hdhr-dvr-manager.git
+cd hdhr-dvr-manager
+# edit docker-compose.yml: set DVR_HOST (or set it later in the Settings tab)
+docker compose up -d --build
+```
+
+Open `http://localhost:8080` (or `http://<server-ip>:8080` if it runs on another machine).
+
+Your keep limits and settings are stored in `./data` (mounted into the container), so they survive rebuilds.
+
+## Configuration
+
+Set these under `environment:` in `docker-compose.yml`.
+
+| Variable | Default | What it does |
+|---|---|---|
+| `DVR_HOST` | none | IP or hostname of your DVR. Can also be set from the Settings tab, which takes priority. |
+| `DVR_STORAGE_URL` | none | Point straight at the record engine's `recorded_files.json` instead of using `DVR_HOST`. |
+| `DEVICE_AUTH` | read from the DVR | Override the DeviceAuth used to look up recording rules. Join the strings together if you have several tuners. |
+| `TZ` | `UTC` | Your timezone (for example `America/Chicago`), so the daily run happens when you expect. |
+| `AUTO_PRUNE_TIME` | empty (off) | Run the keep-limit cleanup daily at this local time, `HH:MM` 24-hour. |
+| `AUTO_PRUNE_MAX` | `25` | Safety cap. If an automatic run would delete more than this many recordings, it skips and waits for you to review. |
+| `APP_USER` / `APP_PASS` | none | Optional HTTP basic auth for the whole app. |
+| `DATA_DIR` | `/data` | Where limits and settings are stored inside the container. |
+
+If no DVR address is set anywhere, the app falls back to Silicondust's cloud discovery, which only works when you share a public IP with the DVR.
+
+## How keep limits work
+
+1. Type a number in a show's right-hand cell (it reads "All Episodes" until you do).
+2. Recordings are ranked by start time. The newest N are kept and the older ones are removed.
+3. Click **Apply keep limits** to preview and confirm, or let the daily run handle it.
+
+Automatic and manual cleanups delete **without** re-record, so the DVR remembers those episodes as already recorded and won't record them again. Limits are tied to each show, not to the DVR address, so they carry over if you point the app at a different DVR.
+
+## Run without Docker
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+DATA_DIR=./data DVR_HOST=192.168.1.50 flask --app app run --port 8080
+```
+
+## How it talks to the DVR
+
+- `GET http://<dvr>/discover.json`: device info, free and total space, and the record engine URL
+- `GET <StorageURL>` and each show's `EpisodesURL`: the recordings list
+- `POST <CmdURL>` with `cmd=delete&rerecord=0|1`: delete a recording (documented in Silicondust's [DVR API](https://info.hdhomerun.com/info/dvr_api))
+- `GET https://api.hdhomerun.com/api/recording_rules`: your recording rules (cloud), used to show scheduled shows
+
+The DVR doesn't report per-recording file sizes, so "Used on drive" is total space minus free space.
+
+## Security
+
+- The app can delete recordings and change which device it talks to. Keep it on your home network.
+- If you expose it beyond your LAN, put it behind a reverse proxy with HTTPS and set `APP_USER` / `APP_PASS`.
+- The delete endpoint only accepts URLs on the configured DVR's host.
+- Your DVR's `DeviceAuth` is a credential for Silicondust's cloud services. `/api/debug` strips it, but don't paste raw DVR data publicly.
+
+## Troubleshooting
+
+- **Empty list or an error banner:** open the Settings tab, enter the DVR's IP, and use **Test connection**.
+- **See what your DVR actually returns:** open `/api/debug` (first show and first episode, with credentials removed).
+- **Scheduled shows missing:** check `docker logs hdhr-dvr-manager` for a "Could not load recording rules" warning.
+- **Check the automatic run:** the Manage page shows the next and last run; details are in `docker logs hdhr-dvr-manager`.
+
+## Project layout
+
+```
+app.py               Flask backend (DVR access, limits, pruning, settings)
+static/index.html    Single-file web UI
+requirements.txt     Python dependencies
+Dockerfile           Container image (gunicorn, one worker)
+docker-compose.yml   Example deployment
+data/                Created at runtime: limits.json, settings.json (not committed)
+```

@@ -1,0 +1,10 @@
+# runtime data (your limits and settings)
+data/
+
+# python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store

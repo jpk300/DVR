@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DVR Manager</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #121212; --panel: #262626; --row: #262626; --cell: #1f1f1f;
+    --text: #f2f2f2; --muted: #8b8b8b; --sel: #3b6bc9; --danger: #c93b3b; --ok: #5fcf8a; --warn: #f0b429;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a, button { font: inherit; color: inherit; }
+
+  /* top bar */
+  .top { display: flex; align-items: center; padding: 1.1rem 2rem .6rem; gap: 1rem; }
+  .top nav { display: flex; align-items: center; flex: 1; flex-wrap: wrap; }
+  .top nav > * { font-size: 2rem; font-weight: 500; letter-spacing: -.01em; padding: 0 1.1rem; background: none; border: 0;
+                 border-left: 2px solid #444; line-height: 1.1; cursor: pointer; color: var(--muted); }
+  .top nav > *:first-child { border-left: 0; padding-left: 0; color: var(--text); cursor: default; }
+  .top nav > button:hover { color: var(--text); }
+  #clock { font-size: 1.9rem; color: #cfcfcf; }
+
+  .layout { display: grid; grid-template-columns: 340px 1fr; gap: 1.5rem; padding: .6rem 2rem 3rem; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } .top nav > * { font-size: 1.3rem; } #clock { font-size: 1.2rem; } }
+
+  /* left detail panel */
+  #side { position: sticky; top: 1rem; }
+  #panel { background: var(--panel); border-radius: 16px; padding: 1rem; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  #panel .poster { width: 100%; aspect-ratio: 16/9; object-fit: cover; border-radius: 10px; background: #1a1a1a; display: block; }
+  #panel h2 { margin: .8rem 0 .3rem; font-size: 1.25rem; text-align: center; }
+  #panel .syn { text-align: center; color: #d6d6d6; font-size: .95rem; margin: 0 0 .8rem; }
+  #panel .hd { display: flex; align-items: center; justify-content: space-between; margin: .6rem 0 .3rem; color: var(--muted); font-size: .85rem; text-transform: uppercase; letter-spacing: .05em; }
+  .link { background: none; border: 0; color: var(--sel); cursor: pointer; font-size: .85rem; padding: 0; text-transform: none; letter-spacing: 0; filter: brightness(1.4); }
+  .eps { max-height: 38vh; overflow: auto; border-top: 1px solid #383838; }
+  .ep { display: flex; gap: .7rem; align-items: center; padding: .5rem .2rem; border-bottom: 1px solid #333; }
+  .ep .t { flex: 1; min-width: 0; font-size: .95rem; } .ep .sub { color: var(--muted); font-size: .8rem; }
+  .empty { color: var(--muted); text-align: center; padding: 1rem 0; font-size: .95rem; }
+  .actions { margin-top: .9rem; display: flex; flex-direction: column; gap: .6rem; }
+  .actions label { color: var(--muted); font-size: .9rem; display: flex; gap: .5rem; align-items: center; }
+  .btn { padding: .65rem 1rem; border-radius: 12px; border: 0; background: #3a3a3a; cursor: pointer; font-size: 1rem; }
+  .btn.danger { background: var(--danger); font-weight: 600; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  input[type=checkbox] { width: 1.1rem; height: 1.1rem; accent-color: var(--sel); }
+
+  /* right column */
+  .subbar { display: flex; align-items: center; gap: 1.6rem; margin-bottom: .8rem; flex-wrap: wrap; }
+  .tabs { display: flex; gap: 1.6rem; flex: 1; }
+  .tabs a { font-size: 1.5rem; color: var(--muted); cursor: pointer; }
+  .tabs a.on { color: var(--text); }
+  .search { display: flex; align-items: center; gap: .6rem; border-bottom: 2px solid #4a4a4a; padding: .3rem .6rem; min-width: 220px; }
+  .search input { background: none; border: 0; outline: 0; color: var(--text); font: inherit; width: 100%; }
+  #info { color: var(--muted); font-size: .92rem; margin-bottom: .8rem; }
+  #info .ok { color: var(--ok); font-weight: 600; }
+  #info .auto { margin-top: .2rem; }
+  #status { min-height: 1.3rem; color: var(--warn); font-size: .92rem; margin-bottom: .4rem; }
+
+  #list { display: flex; flex-direction: column; gap: 5px; border-radius: 16px; overflow: hidden; }
+  .row { display: grid; grid-template-columns: 62px 1fr 210px; gap: 7px; cursor: pointer; }
+  .row > div { background: var(--row); padding: 1.05rem 1.2rem; display: flex; align-items: center; min-height: 64px; }
+  .row .cnt { background: var(--cell); justify-content: center; color: var(--muted); padding: 0; font-size: 1.15rem; }
+  .row .ttl { font-size: 1.55rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .cell { justify-content: center; font-size: 1.4rem; text-align: center; flex-direction: column; line-height: 1.15; }
+  .row .cell small { font-size: .8rem; color: var(--warn); }
+  .row.sel > div { background: var(--sel); }
+  .row.sel .cnt { background: #335bb0; color: #dbe6ff; }
+  .row.sel .cell small { color: #ffe9a8; }
+  .row .cell input { width: 6rem; font: inherit; font-size: 1.3rem; text-align: center; border: 0; border-radius: 8px; padding: .2rem; background: #fff; color: #111; }
+  @media (max-width: 560px) { .row { grid-template-columns: 44px 1fr 130px; } .row .ttl { font-size: 1.1rem; } .row .cell { font-size: 1rem; } }
+  [hidden] { display: none !important; }
+  /* green pill buttons under the poster */
+  .gbtns { display: flex; flex-direction: column; gap: .6rem; margin: 1rem 0 0; }
+  .gbtn { display: block; width: 100%; padding: .85rem 1rem; border: 0; border-radius: 999px; background: #9bc453; color: #fff;
+          font-weight: 800; font-size: 1rem; letter-spacing: .03em; text-transform: uppercase; cursor: pointer; }
+  .gbtn:hover { filter: brightness(1.08); }
+  .gbtn:active { filter: brightness(.95); }
+  .top nav > .on { color: var(--text); }
+  #settings-view { max-width: 700px; padding: .6rem 2rem 3rem; }
+  .card { background: var(--panel); border-radius: 16px; padding: 1.4rem; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+  .card h2 { margin: 0 0 .3rem; font-size: 1.3rem; }
+  .card .help { color: var(--muted); font-size: .92rem; margin: .2rem 0 1rem; }
+  .card label { display: block; font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
+  .card input[type=text] { width: 100%; font: inherit; font-size: 1.2rem; padding: .7rem .9rem; border-radius: 10px;
+                           border: 2px solid #444; background: #1b1b1b; color: var(--text); outline: 0; }
+  .card input[type=text]:focus { border-color: var(--sel); }
+  .card .btns { display: flex; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
+  .btn.primary { background: var(--sel); font-weight: 600; }
+  #hostMsg { margin-top: 1rem; min-height: 1.4rem; }
+  .good { color: var(--ok); } .bad { color: #ff8a8a; }
+</style>
+</head>
+<body>
+<div class="top">
+  <nav>
+    <span>DVR Manager</span>
+    <button id="tab-manage" class="on">Manage</button>
+    <button id="tab-settings">Settings</button>
+  </nav>
+  <div id="clock"></div>
+</div>
+
+<div id="main-view">
+<div class="layout">
+  <aside id="side">
+    <div id="panel"></div>
+    <div id="sidebtns"></div>
+  </aside>
+  <section>
+    <div class="subbar">
+      <div class="tabs" id="tabs">
+        <a data-sort="title" class="on">Title</a>
+        <a data-sort="count">Most recordings</a>
+        <a data-sort="date">Newest</a>
+      </div>
+      <label class="search">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#ddd" stroke-width="2" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></svg>
+        <input id="q" placeholder="Search" autocomplete="off">
+      </label>
+    </div>
+    <div id="info"></div>
+    <div id="status"></div>
+    <div id="list"></div>
+  </section>
+</div>
+</div>
+
+<div id="settings-view" hidden>
+  <div class="card">
+    <h2>DVR connection</h2>
+    <p class="help">The IP address or hostname of your HDHomeRun DVR. Changes apply immediately, with no restart.</p>
+    <label for="host">DVR IP address or hostname</label>
+    <input type="text" id="host" placeholder="192.168.1.130" autocomplete="off" spellcheck="false">
+    <p class="help" id="hostSrc" style="margin-top:.6rem"></p>
+    <div class="btns">
+      <button class="btn" id="host-test">Test connection</button>
+      <button class="btn primary" id="host-save">Save &amp; apply</button>
+      <button class="btn" id="host-reset">Use server default</button>
+    </div>
+    <div id="hostMsg"></div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+let data = [], limits = {}, freeBytes = null, totalBytes = null, autoInfo = null;
+let current = null, sortMode = "title", query = "", rerecord = false;
+const selected = new Set();
+
+const key = s => s.SeriesID || s.Title;
+const fmtSize = b => b >= 1e12 ? (b/1e12).toFixed(2)+" TB" : b >= 1e9 ? (b/1e9).toFixed(1)+" GB" : (b/1e6).toFixed(0)+" MB";
+const fmtDate = t => t ? new Date(t*1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}) : "";
+const newest = s => Math.max(0, ...s.Episodes.map(e => e.StartTime || 0));
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const status = t => $("status").textContent = t || "";
+
+function tickClock() { $("clock").textContent = new Date().toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
+tickClock(); setInterval(tickClock, 15000);
+
+/* ---------- list (right) ---------- */
+function visibleShows() {
+  const q = query.trim().toLowerCase();
+  const rows = data.filter(s => !q || (s.Title || "").toLowerCase().includes(q));
+  rows.sort((a, b) =>
+    sortMode === "count" ? b.Episodes.length - a.Episodes.length :
+    sortMode === "date" ? newest(b) - newest(a) :
+    (a.Title || "").localeCompare(b.Title || ""));
+  return rows;
+}
+
+function fillCell(cell, s) {
+  cell.replaceChildren();
+  const n = limits[key(s)];
+  if (!n) { cell.textContent = "All Episodes"; return; }
+  cell.append(document.createTextNode(`Keep ${n}`));
+  const extra = Math.max(0, s.Episodes.length - n);
+  if (extra) cell.append(el("small", null, `${extra} over limit`));
+}
+
+function editCell(cell, s) {
+  const input = el("input"); input.type = "number"; input.min = "1"; input.placeholder = "All";
+  input.value = limits[key(s)] || "";
+  cell.replaceChildren(input); input.focus(); input.select();
+  let done = false;
+  const finish = async save => {
+    if (done) return; done = true;
+    if (save) await saveLimit(s, input.value === "" ? null : parseInt(input.value, 10));
+    renderList(); renderPanel();
+  };
+  input.onclick = e => e.stopPropagation();
+  input.onkeydown = e => { if (e.key === "Enter") finish(true); if (e.key === "Escape") finish(false); };
+  input.onblur = () => finish(true);
+}
+
+async function saveLimit(s, keep) {
+  const r = await fetch("api/limits", {method: "POST", headers: {"Content-Type": "application/json"},
+                                       body: JSON.stringify({series_id: key(s), keep})});
+  const j = await r.json();
+  if (!r.ok) { status("Error: " + j.error); return; }
+  limits = j.limits; status("");
+}
+
+function renderList() {
+  const list = $("list"); list.replaceChildren();
+  const rows = visibleShows();
+  if (!rows.length) list.append(el("div", "empty", data.length ? "No shows match your search." : "No shows yet."));
+  for (const s of rows) {
+    const row = el("div", "row" + (key(s) === current ? " sel" : ""));
+    const cnt = el("div", "cnt", s.Episodes.length);
+    const ttl = el("div", "ttl", s.Title || "(untitled)");
+    const cell = el("div", "cell"); fillCell(cell, s);
+    cell.title = "Click to set how many recordings to keep";
+    cell.onclick = e => { e.stopPropagation(); current = key(s); editCell(cell, s); renderPanel(); };
+    row.append(cnt, ttl, cell);
+    row.onclick = () => { current = key(s); renderList(); renderPanel(); };
+    list.append(row);
+  }
+}
+
+/* ---------- panel (left) ---------- */
+function globalButtons() {
+  const box = el("div", "gbtns");
+  const refresh = el("button", "gbtn", "Refresh"); refresh.onclick = load;
+  const prune = el("button", "gbtn", "Apply keep limits"); prune.onclick = doPrune;
+  box.append(refresh, prune);
+  return box;
+}
+
+function renderPanel() {
+  const p = $("panel"); p.replaceChildren();
+  const s = data.find(x => key(x) === current);
+  if (!s) { p.append(el("div", "empty", data.length ? "Select a show" : "No shows yet.")); return; }
+
+  if (s.ImageURL) {
+    const img = el("img", "poster"); img.src = s.ImageURL; img.alt = ""; img.onerror = () => img.style.display = "none";
+    p.append(img);
+  }
+  p.append(el("h2", null, s.Title || "(untitled)"));
+
+  const eps = [...s.Episodes].sort((a, b) => (b.StartTime || 0) - (a.StartTime || 0));
+  const syn = eps.find(e => e.Synopsis);
+  p.append(el("p", "syn", syn ? syn.Synopsis : (eps.length ? "" : "Scheduled to record. No recordings yet.")));
+
+  const hd = el("div", "hd"); hd.append(el("span", null, plural(eps.length, "recording")));
+  if (eps.length) {
+    const all = el("button", "link", "Select all");
+    all.onclick = () => { const allSel = eps.every(e => selected.has(e.CmdURL));
+      eps.forEach(e => allSel ? selected.delete(e.CmdURL) : selected.add(e.CmdURL)); renderPanel(); };
+    hd.append(all);
+  }
+  p.append(hd);
+
+  if (eps.length) {
+    const box = el("div", "eps");
+    for (const e of eps) {
+      const row = el("div", "ep");
+      const cb = el("input"); cb.type = "checkbox"; cb.checked = selected.has(e.CmdURL);
+      cb.onchange = () => { cb.checked ? selected.add(e.CmdURL) : selected.delete(e.CmdURL); renderPanel(); };
+      const t = el("div", "t"); t.append(el("div", null, e.EpisodeTitle || e.Title || ""));
+      const dur = (e.RecordStartTime && e.RecordEndTime) ? Math.round((e.RecordEndTime - e.RecordStartTime) / 60) + " min" : "";
+      t.append(el("div", "sub", [e.EpisodeNumber, fmtDate(e.StartTime), dur].filter(Boolean).join(" · ")));
+      row.append(cb, t); box.append(row);
+    }
+    p.append(box);
+  }
+
+  const actions = el("div", "actions");
+  const lbl = el("label"); const rr = el("input"); rr.type = "checkbox"; rr.checked = rerecord;
+  rr.onchange = () => rerecord = rr.checked;
+  lbl.append(rr, document.createTextNode("Re-record deleted episodes"));
+  const del = el("button", "btn danger", `Delete selected (${selected.size})`);
+  del.disabled = selected.size === 0; del.onclick = doDelete;
+  actions.append(lbl, del); p.append(actions);
+}
+
+/* ---------- info line ---------- */
+function renderInfo() {
+  const box = $("info"); box.replaceChildren();
+  const parts = [plural(data.length, "show"), plural(data.reduce((a, s) => a + s.Episodes.length, 0), "recording")];
+  if (totalBytes != null && freeBytes != null) parts.push(`${fmtSize(totalBytes - freeBytes)} used`, `${fmtSize(freeBytes)} free`);
+  box.append(el("div", null, parts.join(" · ")));
+  const a = autoInfo, line = el("div", "auto");
+  if (a && a.enabled) {
+    line.append(el("span", "ok", "✓ Automatic cleanup on"));
+    line.append(document.createTextNode(
+      (a.next ? ` · next run ${new Date(a.next).toLocaleString()}` : ` · daily at ${a.time}`) +
+      (a.last ? ` · last run (${new Date(a.last.when).toLocaleString()}): ${a.last.summary}` : "")));
+    box.append(line);
+  } else if (a) {
+    line.textContent = "Automatic cleanup is off. Set AUTO_PRUNE_TIME on the server to run it daily.";
+    box.append(line);
+  }
+}
+
+/* ---------- actions ---------- */
+async function load() {
+  status("Loading…"); selected.clear();
+  const [r, lr] = await Promise.all([fetch("api/recordings"), fetch("api/limits")]);
+  const j = await r.json();
+  if (!r.ok) { status("Error: " + j.error); return; }
+  const lj = await lr.json();
+  limits = lj.limits || {}; autoInfo = lj.auto || null; data = j;
+  try {
+    const sr = await fetch("api/status"); const sj = await sr.json();
+    freeBytes = sr.ok ? sj.free : null; totalBytes = sr.ok ? sj.total : null;
+  } catch (e) { freeBytes = totalBytes = null; }
+  if (!data.some(s => key(s) === current)) current = visibleShows().length ? key(visibleShows()[0]) : null;
+  status(""); renderInfo(); renderList(); renderPanel();
+}
+
+async function doDelete() {
+  const n = selected.size;
+  if (!confirm(`Permanently delete ${n} recording(s)${rerecord ? " and re-record them" : ""}?`)) return;
+  status("Deleting…");
+  const r = await fetch("api/delete", {method: "POST", headers: {"Content-Type": "application/json"},
+                                       body: JSON.stringify({cmd_urls: [...selected], rerecord})});
+  const res = await r.json();
+  const failed = res.filter(x => !x.ok).length;
+  await load();
+  status(failed ? `${failed} of ${n} failed.` : `Deleted ${n}.`);
+}
+
+async function doPrune() {
+  status("Checking limits…");
+  const r = await fetch("api/prune/preview"); const plan = await r.json();
+  if (!r.ok) { status("Error: " + plan.error); return; }
+  if (!plan.length) { status("Nothing to prune: every show is within its limit."); return; }
+  const count = plan.reduce((a, g) => a + g.Episodes.length, 0);
+  const lines = plan.map(g => `• ${g.Title}: ${g.Episodes.length} oldest (keeping ${g.Keep})`).join("\n");
+  if (!confirm(`Permanently delete ${count} recording(s) to meet your keep limits?\n\n${lines}`)) { status(""); return; }
+  status("Pruning…");
+  const pr = await fetch("api/prune", {method: "POST"}); const pj = await pr.json();
+  if (!pr.ok) { status("Error: " + pj.error); return; }
+  const failed = pj.results.filter(x => !x.ok).length;
+  await load();
+  status(failed ? `${failed} of ${pj.results.length} failed.` : `Pruned ${pj.results.length}.`);
+}
+
+$("q").oninput = e => { query = e.target.value; renderList(); };
+$("tabs").onclick = e => {
+  const a = e.target.closest("a"); if (!a) return;
+  sortMode = a.dataset.sort;
+  document.querySelectorAll("#tabs a").forEach(x => x.classList.toggle("on", x === a));
+  renderList();
+};
+/* ---------- settings view ---------- */
+function showView(v) {
+  const settings = v === "settings";
+  $("main-view").hidden = settings;
+  $("settings-view").hidden = !settings;
+  $("tab-manage").classList.toggle("on", !settings);
+  $("tab-settings").classList.toggle("on", settings);
+  if (settings) loadSettings();
+}
+const setMsg = (t, cls) => { const m = $("hostMsg"); m.textContent = t || ""; m.className = cls || ""; };
+const deviceLine = d => `${d.name || "DVR"}${d.model ? " (" + d.model + ")" : ""}${d.free != null ? " · " + fmtSize(d.free) + " free" : ""}`;
+
+async function loadSettings() {
+  const j = await (await fetch("api/settings")).json();
+  $("host").value = j.dvr_host || "";
+  $("hostSrc").textContent =
+    j.source === "ui" ? "Saved from this page." :
+    j.source === "env" ? `Using the server default (${j.env_dvr_host}).` :
+    "No address set. The app will try Silicondust cloud discovery.";
+  setMsg("");
+}
+
+async function submitHost(mode) {   // "test" | "save" | "reset"
+  setMsg(mode === "test" ? "Testing…" : "Applying…");
+  const r = await fetch(mode === "test" ? "api/settings/test" : "api/settings", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({dvr_host: mode === "reset" ? "" : $("host").value})
+  });
+  const j = await r.json();
+  if (!r.ok) { setMsg("✗ " + j.error, "bad"); return; }
+  if (mode === "test") { setMsg("✓ Connected: " + deviceLine(j.device), "good"); return; }
+  await loadSettings();
+  setMsg(mode === "reset" ? "✓ Back to the server default." : "✓ Saved and applied: " + deviceLine(j.device), "good");
+  load();
+}
+$("tab-manage").onclick = () => showView("main");
+$("tab-settings").onclick = () => showView("settings");
+$("host-test").onclick = () => submitHost("test");
+$("host-save").onclick = () => submitHost("save");
+$("host-reset").onclick = () => submitHost("reset");
+$("host").onkeydown = e => { if (e.key === "Enter") submitHost("save"); };
+
+$("sidebtns").append(globalButtons());
+load();
+</script>
+</body>
+</html>
