@@ -8,7 +8,8 @@ services:
     volumes:
       - ./data:/data          # your keep limits and settings (limits.json, settings.json); not committed to git
     environment: {}
-      # Set your DVR's address in the app's Settings tab. Optionally give it a first-run default here:
+      # Set your DVR's address in the app's Settings tab. Optionally give it a first-run default here
+      # (copied into data/settings.json on first start, then ignored; change it in Settings after that):
       # DVR_HOST: "192.168.1.50"
       # The DVR must be on a private network (10.x, 172.16-31.x, 192.168.x). To allow another range,
       # for example Tailscale, list it here:

@@ -7,9 +7,7 @@ A rule is {"keep": N or None, "delete_watched": bool}:
 Shows with no rule keep everything. Recordings whose watched status the DVR doesn't report
 are treated as unwatched, so a watched rule never deletes them.
 """
-from . import history
-from .dvr_client import delete_urls, episode_index, fetch_one_series, fetch_series
-from .storage import data_lock, load_limits
+from .dvr_client import episode_index
 
 
 def series_key(s):
@@ -34,9 +32,8 @@ def normalize_rule(value):
     return None
 
 
-def normalized_limits(limits=None):
+def normalized_limits(limits):
     """Every stored rule in the current format (rules that mean "keep everything" are dropped)."""
-    limits = load_limits() if limits is None else limits
     out = {}
     for k, v in limits.items():
         rule = normalize_rule(v)
@@ -84,14 +81,6 @@ def build_plan(series, limits, only=None):
     return plan
 
 
-def load_shows(series_id=None):
-    """All shows, or just one (two DVR requests instead of one per show)."""
-    if series_id is None:
-        return fetch_series()
-    s = fetch_one_series(series_id)
-    return [s] if s else []
-
-
 class PlanChanged(Exception):
     """The fresh plan no longer matches the one the user confirmed."""
     def __init__(self, plan):
@@ -99,14 +88,15 @@ class PlanChanged(Exception):
         self.plan = plan
 
 
-def run_prune(max_deletes=None, confirmed=None, series_id=None, source="keep-rules"):
-    """Delete what the keep rules remove, for every show or only `series_id`.
+def run_prune(svc, max_deletes=None, confirmed=None, series_id=None, source="keep-rules"):
+    """Delete what the keep rules remove, for every show or only `series_id`. `svc` is the app's
+    Services (client, storage, history).
     Returns (plan, results); results is None if the run was skipped for exceeding max_deletes.
     If `confirmed` is given (the CmdURLs the user reviewed), the fresh plan must match it
     exactly, otherwise PlanChanged is raised and nothing is deleted."""
-    with data_lock:
-        series = load_shows(series_id)
-        plan = build_plan(series, load_limits(), only=series_id)
+    with svc.storage.data_lock:
+        series = svc.client.load_shows(series_id)
+        plan = build_plan(series, svc.storage.limits(), only=series_id)
         urls = [e["CmdURL"] for g in plan for e in g["Episodes"] if e.get("CmdURL")]
         if confirmed is not None and set(urls) != set(confirmed):
             raise PlanChanged(plan)
@@ -116,6 +106,6 @@ def run_prune(max_deletes=None, confirmed=None, series_id=None, source="keep-rul
             return plan, []
         # the URLs came from the fresh listing above, so they are the allowed set
         index = episode_index(series)
-        results = delete_urls(urls, rerecord=0, allowed={u: index[u] for u in urls})
-        history.record(results, source)
+        results = svc.client.delete_urls(urls, rerecord=0, allowed={u: index[u] for u in urls})
+        svc.history.record(results, source)
         return plan, results
