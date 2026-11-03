@@ -18,6 +18,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 app = Flask(__name__, static_folder=os.path.join(ROOT, "static"), static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = MAX_REQUEST_BYTES
 
+# The page loads its script and styles from /static only, so it can run under a strict policy.
+# Posters come from the DVR or Silicondust's image servers, so images may load from any http(s) host.
+CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self' http: https: data:",
+    "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'none'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+])
+
+
 @app.before_request
 def check_auth():
     if not APP_USER:
@@ -32,6 +47,16 @@ def check_auth():
 def ensure_scheduler():
     scheduler.ensure_started()
 
+
+@app.after_request
+def security_headers(resp):
+    resp.headers.setdefault("Content-Security-Policy", CSP)
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("X-Frame-Options", "DENY")  # older browsers that ignore frame-ancestors
+    return resp
+
+
+# ---------- routes ----------
 
 @app.get("/")
 def index():
