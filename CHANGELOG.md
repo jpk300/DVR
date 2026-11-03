@@ -7,6 +7,9 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 ## [Unreleased]
 
 ### Added
+- CI (GitHub Actions): ruff, an app start-up check, ESLint, a JSDoc type check, and a Docker build.
+- A damaged `settings.json`, `limits.json` or `last_run.json` no longer breaks the app: it is renamed to
+  `<name>.corrupt-<timestamp>`, an error is logged, and defaults are used.
 - **Keep rules** replace keep limits: keep everything, keep the newest N, or delete watched episodes
   (optionally keeping the newest N unwatched). Edited in a dialog that previews what the rule would delete.
 - Watched and partly-watched markers on recordings, from the DVR's `Resume` field.
@@ -27,6 +30,12 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 - Keyboard access: sort tabs, show rows and keep-limit cells work with Tab, Enter and Space.
 
 ### Changed
+- `settings.json` is the only source of the DVR address and schedule. `DVR_HOST`, `DVR_STORAGE_URL`, `TZ`
+  and `AUTO_PRUNE_*` are copied into it once, on first start, and ignored after that. The Settings tab no
+  longer shows a "server default".
+- Backend: `create_app(config)` builds the app; the HTTP session and caches live in `DvrClient`, and storage,
+  history and the scheduler are objects too, so nothing is read from the environment at import time.
+- Front end: `app.js` is split into ES modules under `static/js/`, each checked with `// @ts-check`.
 - The keep-limit cell is now a clearly clickable "Keep: …" button.
 - Refresh and Apply all keep rules moved into the toolbar above the list (they were under one show's panel).
 - Smaller top bar without the clock; it no longer wraps on phones. Sort labels are shorter ("Count").

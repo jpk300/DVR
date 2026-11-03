@@ -37,22 +37,34 @@ Your keep rules, settings, deletion history and the result of the last automatic
 
 ## Configuration
 
-Set these under `environment:` in `docker-compose.yml`.
+The DVR address and the automatic-cleanup schedule live in `data/settings.json` and are changed on the **Settings** tab. That file is the only place the app reads them from.
+
+The variables below are set under `environment:` in `docker-compose.yml`.
+
+**First-run defaults.** These are copied into `settings.json` the first time the app starts, then ignored. To change them later, use the Settings tab.
+
+| Variable | What it sets |
+|---|---|
+| `DVR_HOST` | IP or hostname of your DVR |
+| `DVR_STORAGE_URL` | The record engine's `recorded_files.json` URL; its host is used as the DVR address if `DVR_HOST` isn't set |
+| `TZ` | Timezone for the daily cleanup |
+| `AUTO_PRUNE_TIME` | Daily cleanup time (`HH:MM`); setting it also turns the cleanup on |
+| `AUTO_PRUNE_MAX` | The cleanup's safety cap |
+
+**Deployment settings.** These are read on every start.
 
 | Variable | Default | What it does |
 |---|---|---|
-| `DVR_HOST` | none | IP or hostname of your DVR. Can also be set from the Settings tab, which takes priority. |
 | `DVR_ALLOWED_NETWORKS` | private ranges only | Extra CIDR ranges the DVR may live on, comma-separated (for example `100.64.0.0/10` for Tailscale). By default only `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` and IPv6 `fc00::/7` are allowed. |
-| `DVR_STORAGE_URL` | none | Point straight at the record engine's `recorded_files.json` instead of using `DVR_HOST`. |
 | `DEVICE_AUTH` | read from the DVR | Override the DeviceAuth used to look up recording rules. Join the strings together if you have several tuners. |
 | `APP_USER` / `APP_PASS` | none | Optional HTTP basic auth for the whole app. |
-| `DATA_DIR` | `/data` | Where limits, settings and the last automatic run are stored inside the container. |
+| `DATA_DIR` | `/data` | Where settings, keep rules, deletion history and the last automatic run are stored inside the container. |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`. Routine runs log at `INFO`; skipped or partly failed runs at `WARNING`; failures at `ERROR`. |
 | `DVR_SCHEDULER` | `1` | Set to `0` to turn off the automatic-cleanup scheduler entirely (for example in tests). |
 
-Automatic cleanup (on/off, daily time, timezone and safety cap) is configured on the **Settings** tab, not here. The scheduler picks up changes as soon as you save. `AUTO_PRUNE_TIME`, `AUTO_PRUNE_MAX` and `TZ` still work as first-run defaults if you prefer to set them in the compose file; anything saved in the app takes priority.
+The scheduler picks up schedule changes as soon as you save them. If a data file is ever damaged (for example hand-edited into invalid JSON), the app logs an error, renames it to `<name>.corrupt-<timestamp>` and carries on with defaults. Fix the file and copy it back to restore it.
 
-If no DVR address is set anywhere, the app falls back to Silicondust's cloud discovery, which only works when you share a public IP with the DVR.
+If no DVR address is saved, the app falls back to Silicondust's cloud discovery, which only works when you share a public IP with the DVR.
 
 ## How keep rules work
 
@@ -110,15 +122,20 @@ The DVR doesn't report per-recording file sizes, so "Used on drive" is total spa
 ```
 app.py               Entry point (gunicorn app:app / flask --app app run)
 dvr/                 Backend package
-  config.py            environment variables, tunables, logging
-  storage.py           JSON files in DATA_DIR
+  __init__.py          create_app() and the shared Services
+  config.py            deployment settings from the environment, tunables, logging
+  storage.py           settings.json, limits.json, last_run.json (and corrupt-file handling)
   history.py           the deletion history
-  dvr_client.py        all DVR and cloud requests, with the SSRF guard
-  pruning.py           keep-limit plans and pruning
-  scheduler.py         daily automatic cleanup
-  routes.py            Flask app, HTTP API, security headers
-static/              Web UI: index.html, app.js, app.css
+  dvr_client.py        DvrClient: all DVR and cloud requests, with the SSRF guard
+  pruning.py           keep rules and pruning
+  scheduler.py         Scheduler: the daily automatic cleanup
+  routes.py            the HTTP API (a Flask blueprint), security headers
+static/              Web UI: index.html, app.css
+  js/                  ES modules (main.js is the entry point), type-checked with // @ts-check
 requirements.txt     Python dependencies
+package.json         ESLint and TypeScript, for checking static/js (no build step)
+pyproject.toml       ruff settings
+.github/workflows/   CI: ruff, a start-up check, ESLint, type check, Docker build
 Dockerfile           Container image
 gunicorn.conf.py     gunicorn settings (one worker) and the scheduler start-up hook
 docker-compose.yml   Example deployment
