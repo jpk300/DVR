@@ -36,6 +36,47 @@ Open the **Settings** tab and enter your DVR's IP address, then use **Test conne
 
 Your keep rules, protected recordings, settings, deletion history and the result of the last automatic run are stored in `./data` (mounted into the container), so they survive rebuilds.
 
+## Updating and managing the container
+
+Run these from the folder you cloned into. None of them touch `./data`, so your settings, keep rules, protected recordings and history are kept.
+
+**Update to the latest version:**
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Then refresh the page in your browser so it loads the new script and styles. If a step shows `CACHED` for every line, nothing changed since your last build.
+
+**Check it's running and up to date:**
+
+```bash
+docker compose ps
+docker logs hdhr-dvr-manager
+```
+
+`ps` should show the container as `Up`, and the logs should end with `Auto-prune scheduler started`. To confirm the page is the current version, view its source (Ctrl+U, or ⌥⌘U on a Mac) and check it loads `static/js/main.js`.
+
+**Stop, start or restart:**
+
+```bash
+docker compose stop      # stop it; it stays stopped, even after a reboot, until you start it
+docker compose start     # start it again
+docker compose restart   # stop and start (for example after editing docker-compose.yml)
+```
+
+While it's stopped the page doesn't load and the daily cleanup doesn't run.
+
+**Remove it:**
+
+```bash
+docker compose down                       # remove the container and its network
+docker image rm dvr-hdhr-dvr-manager      # also free the image's disk space (optional)
+```
+
+The image is named after the folder you cloned into (`dvr-hdhr-dvr-manager` for a folder called `DVR`); `docker images` lists it. `docker compose up -d` (or `up -d --build`) brings it back. To remove everything, including your settings and history, also delete the `data` folder.
+
 ## Configuration
 
 The DVR address and the automatic-cleanup schedule live in `data/settings.json` and are changed on the **Settings** tab. That file is the only place the app reads them from.
