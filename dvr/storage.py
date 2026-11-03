@@ -43,11 +43,13 @@ class Storage:
         self.limits_path = os.path.join(data_dir, "limits.json")
         self.last_run_path = os.path.join(data_dir, "last_run.json")
         self.history_path = os.path.join(data_dir, "history.jsonl")
+        self.protected_path = os.path.join(data_dir, "protected.json")
         # Held while changing keep rules and while pruning, so the two never interleave.
         self.data_lock = threading.Lock()
         # Held for read-modify-write of settings.json, so two saves can't overwrite each other.
         self._settings_lock = threading.Lock()
         self._file_lock = threading.Lock()
+        self._protected_lock = threading.Lock()
 
     # ---------- low level ----------
     def write_json(self, path, obj):
@@ -154,6 +156,22 @@ class Storage:
 
     def save_limits(self, limits):
         self.write_json(self.limits_path, limits)
+
+    # ---------- protected recordings ----------
+    def protected(self):
+        """{recording key: details} for every recording the user has protected from deletion."""
+        return self.read_json(self.protected_path) or {}
+
+    def set_protected(self, key, details=None):
+        """Protect a recording (details given) or unprotect it (details None). Returns all of them."""
+        with self._protected_lock:
+            p = self.protected()
+            if details is None:
+                p.pop(key, None)
+            else:
+                p[key] = details
+            self.write_json(self.protected_path, p)
+            return p
 
     # ---------- last automatic run ----------
     def last_run(self):

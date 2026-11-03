@@ -15,7 +15,7 @@ import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 from requests.adapters import HTTPAdapter
@@ -71,9 +71,19 @@ def watched_fields(ep):
     return {"Watched": False, "ResumeSeconds": r if r > 0 else None}
 
 
+def recording_key(ep):
+    """A stable id for one recording that doesn't depend on the DVR's address (so protection
+    survives the DVR changing IP): the program plus when it aired, or else the DVR's own id."""
+    pid, start = ep.get("ProgramID"), ep.get("StartTime")
+    if pid and start:
+        return f"{pid}@{start}"
+    ids = parse_qs(urlparse(ep.get("CmdURL") or "").query).get("id")
+    return f"id:{ids[0]}" if ids else (ep.get("CmdURL") or "")
+
+
 def episode_index(series):
-    """Map each recording's CmdURL to what history needs to describe it."""
-    return {e["CmdURL"]: {"Show": s.get("Title"), "SeriesID": s.get("SeriesID"),
+    """Map each recording's CmdURL to what history needs to describe it, and its Key."""
+    return {e["CmdURL"]: {"Show": s.get("Title"), "SeriesID": s.get("SeriesID"), "Key": e.get("Key"),
                           "EpisodeTitle": e.get("EpisodeTitle") or e.get("Title"),
                           "EpisodeNumber": e.get("EpisodeNumber"), "StartTime": e.get("StartTime")}
             for s in series for e in s["Episodes"] if e.get("CmdURL")}
@@ -266,7 +276,8 @@ class DvrClient:
             except Exception:
                 skipped += 1
                 continue
-            entry["Episodes"].append({**{k: ep.get(k) for k in EP_FIELDS}, **watched_fields(ep)})
+            entry["Episodes"].append({**{k: ep.get(k) for k in EP_FIELDS}, **watched_fields(ep),
+                                      "Key": recording_key(ep)})
         if skipped:
             log.warning("Hid %d recording(s) of %r with unexpected URLs", skipped, s.get("Title"))
         return entry
@@ -350,10 +361,11 @@ class DvrClient:
             lc.update(t=time.time(), data=out)
             return out
 
-    def delete_urls(self, cmd_urls, rerecord=0, allowed=None):
+    def delete_urls(self, cmd_urls, rerecord=0, allowed=None, protected=frozenset()):
         """Delete recordings. `allowed` maps each deletable CmdURL to its details (episode_index());
         it must come from a fresh server-side DVR listing, and is built from all shows if not given.
-        URLs not in it are refused, and each must still pass the scheme / host / port / path checks.
+        URLs not in it are refused, as are recordings whose Key is in `protected`, and each must
+        still pass the scheme / host / port / path checks.
         Each result carries the recording's details, and attempted=False if it was refused."""
         if allowed is None:
             allowed = episode_index(self.fetch_series())
@@ -364,6 +376,10 @@ class DvrClient:
                                 "error": "not a current recording on the DVR"})
                 continue
             meta = allowed[u]
+            if meta.get("Key") in protected:
+                results.append({"cmd_url": u, "ok": False, "attempted": False, "protected": True,
+                                "error": "this recording is protected", **meta})
+                continue
             try:
                 self.check_dvr_url(u, "/recorded/cmd")
                 status, _ = self.fetch(u, method="POST", params={"cmd": "delete", "rerecord": rerecord})

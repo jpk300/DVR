@@ -1,8 +1,8 @@
 // @ts-check
 // The selected show's details and recordings (left, or a full-screen sheet on phones).
-import {doDelete, doPrune} from "./actions.js";
+import {doDelete, doPrune, setProtected} from "./actions.js";
 import {busy} from "./api.js";
-import {$, button, el, plural} from "./dom.js";
+import {$, LOCK_CLOSED, LOCK_OPEN, button, el, plural, svg} from "./dom.js";
 import {durSec, fmtEpoch, fmtHours, showHours} from "./format.js";
 import {openRuleDialog} from "./ruledialog.js";
 import {ruleText, toDelete} from "./rules.js";
@@ -48,12 +48,15 @@ function renderPanel() {
   p.append(box);
 
   const hd = el("div", "hd");
-  hd.append(el("span", null, plural(eps.length, "recording") + (eps.length ? ` · ${fmtHours(showHours(s))}` : "")));
-  if (eps.length) {
+  const nProtected = eps.filter(e => e.Protected).length;
+  hd.append(el("span", null, plural(eps.length, "recording") + (eps.length ? ` · ${fmtHours(showHours(s))}` : "") +
+                             (nProtected ? ` · ${nProtected} protected` : "")));
+  const deletable = eps.filter(e => !e.Protected);
+  if (deletable.length) {
     const all = button("link");
     all.onclick = () => {
-      const allSel = eps.every(e => state.selected.has(e.CmdURL));
-      eps.forEach(e => allSel ? state.selected.delete(e.CmdURL) : state.selected.add(e.CmdURL));
+      const allSel = deletable.every(e => state.selected.has(e.CmdURL));
+      deletable.forEach(e => allSel ? state.selected.delete(e.CmdURL) : state.selected.add(e.CmdURL));
       renderPanel();
       /** @type {HTMLElement | null} */ ($("panel").querySelector(".hd .link"))?.focus();
     };
@@ -64,12 +67,14 @@ function renderPanel() {
   if (eps.length) {
     const list = el("div", "eps");
     for (const e of eps) {
-      const row = el("label", "ep");
+      const row = el("label", "ep" + (e.Protected ? " protected" : ""));
       const cb = el("input");
-      cb.type = "checkbox"; cb.checked = state.selected.has(e.CmdURL);
+      cb.type = "checkbox"; cb.checked = !e.Protected && state.selected.has(e.CmdURL);
+      cb.disabled = !!e.Protected;
+      if (e.Protected) cb.title = "Protected recordings can't be deleted. Unprotect it first.";
       cb.onchange = () => {
         cb.checked ? state.selected.add(e.CmdURL) : state.selected.delete(e.CmdURL);
-        updateDeleteButton(); updateSelectAll(eps);
+        updateDeleteButton(); updateSelectAll(deletable);
       };
       const t = el("div", "t");
       t.append(el("div", null, e.EpisodeTitle || e.Title || ""));
@@ -78,9 +83,10 @@ function renderPanel() {
       const marks = el("div", "marks");
       if (e.Watched === true) marks.append(el("span", "mark watched", "✓ Watched"));
       else if (e.ResumeSeconds) marks.append(el("span", "mark", `▶ Watched ${Math.round(e.ResumeSeconds / 60)} min`));
+      if (e.Protected) marks.append(el("span", "mark protected", "Protected"));
       if (doomed.has(e.CmdURL)) marks.append(el("span", "mark doomed", "Rule deletes this"));
       if (marks.children.length) t.append(marks);
-      row.append(cb, t);
+      row.append(cb, t, lockButton(s, e));
       list.append(row);
     }
     p.append(list);
@@ -97,7 +103,26 @@ function renderPanel() {
   del.onclick = () => busy(del, doDelete);
   actions.append(lbl, del);
   p.append(actions);
-  updateDeleteButton(); updateSelectAll(eps);
+  updateDeleteButton(); updateSelectAll(deletable);
+}
+
+/**
+ * The lock toggle on one recording.
+ * @param {import("./types.js").Show} s @param {Episode} e
+ */
+function lockButton(s, e) {
+  const name = e.EpisodeTitle || e.Title || "this recording";
+  const b = button("lock" + (e.Protected ? " on" : ""));
+  b.append(svg(e.Protected ? LOCK_CLOSED : LOCK_OPEN));
+  b.setAttribute("aria-pressed", String(!!e.Protected));
+  b.setAttribute("aria-label", e.Protected ? `${name} is protected. Remove protection` : `Protect ${name} from deletion`);
+  b.title = e.Protected ? "Protected: never deleted. Click to remove protection." : "Protect from deletion";
+  // the button sits inside the row's <label>; don't let the click tick the checkbox too
+  b.onclick = ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    busy(b, () => setProtected(s, e, !e.Protected));
+  };
+  return b;
 }
 
 function updateDeleteButton() {

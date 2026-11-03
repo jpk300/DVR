@@ -73,6 +73,24 @@ export async function refreshShow(sid) {
   }
 }
 
+/**
+ * Protect a recording from deletion, or remove its protection.
+ * @param {Show} s @param {import("./types.js").Episode} e @param {boolean} on
+ */
+export async function setProtected(s, e, on) {
+  try {
+    await api("api/protect", {json: {series_id: key(s), key: e.Key, protected: on}});
+  } catch (err) {
+    toast(`Couldn't ${on ? "protect" : "unprotect"} it: ` + /** @type {Error} */ (err).message, "err");
+    return;
+  }
+  e.Protected = on;
+  if (on) state.selected.delete(e.CmdURL);
+  render();
+  const name = e.EpisodeTitle || e.Title || "this recording";
+  toast(on ? `Protected ${name}. Deletes and keep rules will skip it.` : `${name} is no longer protected.`, "info");
+}
+
 /** Delete the recordings ticked in the panel, after confirming. */
 export async function doDelete() {
   const s = currentShow();

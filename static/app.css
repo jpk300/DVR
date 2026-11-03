@@ -115,6 +115,15 @@ input[type=checkbox], input[type=radio] { width: 1.05rem; height: 1.05rem; accen
 .mark { font-size: .7rem; padding: .05rem .4rem; border-radius: 5px; background: #2f2f2f; color: #bbb; }
 .mark.watched { background: #1f3326; color: var(--ok); }
 .mark.doomed { background: #3a2424; color: #ff9d9d; }
+.mark.protected { background: #24303f; color: #9cc0ff; }
+/* lock toggle on each recording */
+.lock { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem;
+        border-radius: 8px; border: 0; background: none; color: #777; cursor: pointer; }
+.lock:hover { background: #333; color: var(--text); }
+.lock.on { color: #9cc0ff; background: #24303f; }
+.lock:disabled { opacity: .5; }
+.ep.protected .t > div:first-child { color: #dbe6ff; }
+.ep input[type=checkbox]:disabled { opacity: .35; cursor: not-allowed; }
 .actions { margin-top: .8rem; display: flex; flex-direction: column; gap: .55rem; }
 .actions label { color: var(--muted); font-size: .88rem; display: flex; gap: .5rem; align-items: center; }
 .actions .btn { justify-content: center; padding: .6rem 1rem; }

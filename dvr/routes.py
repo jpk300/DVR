@@ -1,5 +1,6 @@
 """The HTTP API, as a Flask blueprint. Shared objects come from current_app.extensions["dvr"]
 (see Services in __init__.py), never from module globals."""
+from datetime import datetime, timezone
 from functools import lru_cache
 from zoneinfo import available_timezones
 
@@ -34,6 +35,14 @@ def svc():
 
 def error(msg, status):
     return jsonify({"error": msg}), status
+
+
+def with_protection(shows):
+    """Copies of the shows with Protected set on each recording. Copies, because the client
+    caches the list it returns and protection can change between requests."""
+    keys = svc().storage.protected()
+    return [{**s, "Episodes": [{**e, "Protected": e.get("Key") in keys} for e in s["Episodes"]]}
+            for s in shows]
 
 
 def json_body():
@@ -78,7 +87,7 @@ def index():
 @bp.get("/api/recordings")
 def recordings():
     try:
-        return jsonify(svc().client.fetch_all(fresh=request.args.get("fresh") == "1"))
+        return jsonify(with_protection(svc().client.fetch_all(fresh=request.args.get("fresh") == "1")))
     except Exception as e:
         return error(friendly(e), 502)
 
@@ -92,7 +101,7 @@ def show():
         return error(friendly(e), 502)
     if s is None:
         return error("The DVR has no recordings of this show", 404)
-    return jsonify(s)
+    return jsonify(with_protection([s])[0])
 
 
 @bp.post("/api/delete")
@@ -112,11 +121,12 @@ def delete():
     s = svc()
     try:
         allowed = episode_index(s.client.load_shows(sid)) if sid else None
-        results = s.client.delete_urls(urls, rerecord, allowed)
+        results = s.client.delete_urls(urls, rerecord, allowed, protected=set(s.storage.protected()))
         s.history.record(results, "manual", rerecord=bool(rerecord))
         out = {"results": results}
         if sid:
-            out["show"] = s.client.fetch_one_series(sid)
+            fresh = s.client.fetch_one_series(sid)
+            out["show"] = with_protection([fresh])[0] if fresh else None
         return jsonify(out)
     except Exception as e:
         return error(friendly(e), 502)
@@ -202,7 +212,8 @@ def prune_preview():
     sid = request.args.get("series_id") or None
     s = svc()
     try:
-        return jsonify(build_plan(s.client.load_shows(sid), s.storage.limits(), only=sid))
+        return jsonify(build_plan(s.client.load_shows(sid), s.storage.limits(), only=sid,
+                                  protected=set(s.storage.protected())))
     except Exception as e:
         return error(friendly(e), 502)
 
@@ -226,6 +237,38 @@ def prune_now():
                         "plan": e.plan}), 409
     except Exception as e:
         return error(friendly(e), 502)
+
+
+@bp.post("/api/protect")
+def protect():
+    """Protect one recording from deletion, or remove its protection:
+    {series_id, key, protected: bool}. Protecting checks the recording is on the DVR (two requests)
+    and stores what it is, so the list stays readable; unprotecting works even if it is gone."""
+    body = json_body()
+    if body is None:
+        return error("Send a JSON object", 400)
+    key, sid, on = body.get("key"), body.get("series_id"), body.get("protected")
+    if not key or not isinstance(key, str) or not isinstance(on, bool):
+        return error("key (a string) and protected (true or false) are required", 400)
+    s = svc()
+    if not on:
+        s.storage.set_protected(key, None)
+        return jsonify({"key": key, "protected": False})
+    if not sid or not isinstance(sid, str):
+        return error("series_id is required to protect a recording", 400)
+    try:
+        show = s.client.fetch_one_series(sid)
+    except Exception as e:
+        return error(friendly(e), 502)
+    ep = next((e for e in (show or {}).get("Episodes", []) if e.get("Key") == key), None)
+    if ep is None:
+        return error("That recording isn't on the DVR any more", 404)
+    s.storage.set_protected(key, {
+        "show": show.get("Title"), "series_id": sid, "episode": ep.get("EpisodeTitle") or ep.get("Title"),
+        "number": ep.get("EpisodeNumber"), "start": ep.get("StartTime"),
+        "since": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    })
+    return jsonify({"key": key, "protected": True})
 
 
 @bp.get("/api/history")

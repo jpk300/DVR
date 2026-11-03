@@ -6,6 +6,9 @@ A rule is {"keep": N or None, "delete_watched": bool}:
   * delete_watched + keep N   -> delete watched recordings, and keep only the newest N unwatched
 Shows with no rule keep everything. Recordings whose watched status the DVR doesn't report
 are treated as unwatched, so a watched rule never deletes them.
+Protected recordings are set aside before a rule is applied: they are never deleted and don't
+count toward N, so "keep the newest 2" keeps the 2 newest unprotected recordings plus every
+protected one.
 """
 from .dvr_client import episode_index
 
@@ -42,9 +45,10 @@ def normalized_limits(limits):
     return out
 
 
-def to_delete(episodes, rule):
-    """(episode, reason) pairs the rule removes, oldest first."""
-    eps = sorted(episodes, key=lambda e: e.get("StartTime") or 0, reverse=True)
+def to_delete(episodes, rule, protected=frozenset()):
+    """(episode, reason) pairs the rule removes, oldest first. Protected recordings are skipped."""
+    eps = sorted((e for e in episodes if e.get("Key") not in protected),
+                 key=lambda e: e.get("StartTime") or 0, reverse=True)
     doomed = []
     if rule["delete_watched"]:
         doomed += [(e, "watched") for e in eps if e.get("Watched") is True]
@@ -54,8 +58,9 @@ def to_delete(episodes, rule):
     return sorted(doomed, key=lambda d: d[0].get("StartTime") or 0)
 
 
-def build_plan(series, limits, only=None):
-    """For each show with a rule (or just the show `only`), list the recordings it removes."""
+def build_plan(series, limits, only=None, protected=frozenset()):
+    """For each show with a rule (or just the show `only`), list the recordings it removes.
+    Recordings whose Key is in `protected` are never included."""
     plan = []
     for s in series:
         if only is not None and series_key(s) != only:
@@ -63,7 +68,7 @@ def build_plan(series, limits, only=None):
         rule = normalize_rule(limits.get(series_key(s)))
         if not rule:
             continue
-        doomed = to_delete(s["Episodes"], rule)
+        doomed = to_delete(s["Episodes"], rule, protected)
         if doomed:
             plan.append({
                 "SeriesID": series_key(s),
@@ -96,7 +101,8 @@ def run_prune(svc, max_deletes=None, confirmed=None, series_id=None, source="kee
     exactly, otherwise PlanChanged is raised and nothing is deleted."""
     with svc.storage.data_lock:
         series = svc.client.load_shows(series_id)
-        plan = build_plan(series, svc.storage.limits(), only=series_id)
+        protected = set(svc.storage.protected())
+        plan = build_plan(series, svc.storage.limits(), only=series_id, protected=protected)
         urls = [e["CmdURL"] for g in plan for e in g["Episodes"] if e.get("CmdURL")]
         if confirmed is not None and set(urls) != set(confirmed):
             raise PlanChanged(plan)
@@ -106,6 +112,7 @@ def run_prune(svc, max_deletes=None, confirmed=None, series_id=None, source="kee
             return plan, []
         # the URLs came from the fresh listing above, so they are the allowed set
         index = episode_index(series)
-        results = svc.client.delete_urls(urls, rerecord=0, allowed={u: index[u] for u in urls})
+        results = svc.client.delete_urls(urls, rerecord=0, allowed={u: index[u] for u in urls},
+                                         protected=protected)
         svc.history.record(results, source)
         return plan, results

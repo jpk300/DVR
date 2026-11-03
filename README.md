@@ -10,6 +10,7 @@ A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.c
 - Delete one or many recordings, with an optional **re-record** flag
 - **Per-show keep rules**: keep everything, keep the newest N, or delete watched episodes (optionally keeping only the newest N unwatched)
 - **Watched status** shown on each recording, when the DVR reports it
+- **Protect recordings**: lock individual recordings so nothing (by hand, keep rules or the daily cleanup) can delete them
 - Rules can be set for shows that are **scheduled but have no recordings yet**
 - **Apply all keep rules**, or apply one show's rule from its panel, always with a preview and confirmation first
 - **Deletion history**: every deletion, with when, which episode, how it was triggered and whether it will re-record
@@ -33,7 +34,7 @@ Open `http://localhost:8080` (or `http://<server-ip>:8080` if it runs on another
 
 Open the **Settings** tab and enter your DVR's IP address, then use **Test connection** and **Save & apply**.
 
-Your keep rules, settings, deletion history and the result of the last automatic run are stored in `./data` (mounted into the container), so they survive rebuilds.
+Your keep rules, protected recordings, settings, deletion history and the result of the last automatic run are stored in `./data` (mounted into the container), so they survive rebuilds.
 
 ## Configuration
 
@@ -74,6 +75,8 @@ If no DVR address is saved, the app falls back to Silicondust's cloud discovery,
    - **Delete watched episodes**: every watched recording is deleted. Optionally also keep only the newest N unwatched ones.
 2. The list shows how many recordings each rule would delete, and the show's panel marks them.
 3. Click **Apply all keep rules**, or **Delete N now** in one show's panel, to preview and confirm. Or let the daily run handle it.
+
+**Protected recordings** (the lock button next to each recording) are set aside before a rule is applied. They are never deleted, and they don't count toward N, so "keep the newest 2" keeps the two newest *unprotected* recordings plus every protected one. Protecting an old episode never causes a newer one to be deleted. A protected recording can't be ticked for deletion, and the server refuses to delete it even if asked directly. Remove the protection first to delete it. Protection is stored in `data/protected.json` and identifies each recording by its program and air time, so it survives the DVR changing address.
 
 "Watched" comes from the DVR's `Resume` field (playback position), which the DVR sets to `4294967295` once an episode has been watched to the end. Recordings whose watched status the DVR doesn't report are treated as unwatched, so a watched rule never deletes them. Check what your DVR reports with `/api/debug`.
 
@@ -139,7 +142,7 @@ pyproject.toml       ruff settings
 Dockerfile           Container image
 gunicorn.conf.py     gunicorn settings (one worker) and the scheduler start-up hook
 docker-compose.yml   Example deployment
-data/                Created at runtime: limits.json, settings.json, last_run.json, history.jsonl (not committed)
+data/                Created at runtime: limits.json, settings.json, protected.json, last_run.json, history.jsonl (not committed)
 ```
 
 ## Contributing
