@@ -18,6 +18,7 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 - Keyboard access: sort tabs, show rows and keep-limit cells work with Tab, Enter and Space.
 
 ### Changed
+- The Settings page is more compact: smaller type, inputs and buttons, and tighter spacing.
 - The backend is now the `dvr/` package (`config`, `storage`, `dvr_client`, `pruning`, `scheduler`,
   `routes`). `app.py` is a thin entry point, so `gunicorn app:app` and `flask --app app run` still work.
 - The page's script and styles moved to `static/app.js` and `static/app.css`.
