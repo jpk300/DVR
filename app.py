@@ -1,5 +1,6 @@
 import ipaddress
 import json
+import logging
 import os
 import re
 import socket
@@ -15,6 +16,18 @@ import requests
 from flask import Flask, jsonify, request, Response
 from requests.adapters import HTTPAdapter
 
+try:
+    import fcntl  # Unix only; used so just one process per data directory runs the scheduler
+except ImportError:  # pragma: no cover
+    fcntl = None
+
+# ---------- logging ----------
+# LOG_LEVEL=DEBUG|INFO|WARNING|ERROR (default INFO). Logs go to stderr, so `docker logs` shows them.
+_level = getattr(logging, os.environ.get("LOG_LEVEL", "INFO").strip().upper(), None)
+logging.basicConfig(level=_level if isinstance(_level, int) else logging.INFO,
+                    format="%(asctime)s %(levelname)s [%(name)s] %(message)s")
+log = logging.getLogger("dvr")
+
 app = Flask(__name__, static_folder="static", static_url_path="/static")
 app.config["MAX_CONTENT_LENGTH"] = 1024 * 1024  # request bodies are small JSON; refuse anything bigger
 
@@ -24,6 +37,7 @@ APP_PASS = os.environ.get("APP_PASS")
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 LIMITS_PATH = os.path.join(DATA_DIR, "limits.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
+LAST_RUN_PATH = os.path.join(DATA_DIR, "last_run.json")
 _lock = threading.Lock()
 
 # ---------- tunables ----------
@@ -58,12 +72,17 @@ def load_settings():
         return {}
 
 
-def save_settings(settings):
+def write_json(path, obj):
+    """Write JSON atomically: a crash mid-write leaves the old file, never a half-written one."""
     os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = SETTINGS_PATH + ".tmp"
+    tmp = path + ".tmp"
     with open(tmp, "w") as f:
-        json.dump(settings, f, indent=2)
-    os.replace(tmp, SETTINGS_PATH)
+        json.dump(obj, f, indent=2)
+    os.replace(tmp, path)
+
+
+def save_settings(settings):
+    write_json(SETTINGS_PATH, settings)
 
 
 def clean_host(raw):
@@ -96,7 +115,7 @@ def _load_allowed_networks():
         try:
             nets.append(ipaddress.ip_network(e, strict=False))
         except ValueError:
-            app.logger.warning("Ignoring invalid DVR_ALLOWED_NETWORKS entry: %s", e)
+            log.warning("Ignoring invalid DVR_ALLOWED_NETWORKS entry: %s", e)
     return nets
 
 
@@ -302,7 +321,7 @@ def _load_series(s):
         raw = dvr_json(eps_url, list)
     except Exception as e:
         entry["Error"] = friendly(e)
-        app.logger.warning("Could not load episodes for %r: %s", s.get("Title"), entry["Error"])
+        log.warning("Could not load episodes for %r: %s", s.get("Title"), entry["Error"])
         return entry
     skipped = 0
     for ep in raw:
@@ -315,7 +334,7 @@ def _load_series(s):
             continue
         entry["Episodes"].append({k: ep.get(k) for k in EP_FIELDS})
     if skipped:
-        app.logger.warning("Hid %d recording(s) of %r with unexpected URLs", skipped, s.get("Title"))
+        log.warning("Hid %d recording(s) of %r with unexpected URLs", skipped, s.get("Title"))
     return entry
 
 
@@ -356,7 +375,7 @@ def _safe_rules(fresh):
     try:
         return fetch_rules(fresh)
     except Exception as e:
-        app.logger.warning("Could not load recording rules: %s", friendly(e))
+        log.warning("Could not load recording rules: %s", friendly(e))
         return []
 
 
@@ -415,11 +434,7 @@ def load_limits():
 
 
 def save_limits(limits):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    tmp = LIMITS_PATH + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(limits, f, indent=2)
-    os.replace(tmp, LIMITS_PATH)
+    write_json(LIMITS_PATH, limits)
 
 
 def build_plan(series, limits):
@@ -469,7 +484,16 @@ def run_prune(max_deletes=None, confirmed=None):
         return plan, results
 
 
-_auto = {"last": None}
+def load_last_run():
+    """The most recent automatic run, saved so it survives restarts (None if there hasn't been one)."""
+    try:
+        with open(LAST_RUN_PATH) as f:
+            data = json.load(f)
+    except (FileNotFoundError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 _wake = threading.Event()  # set when the schedule is saved so the scheduler re-reads it right away
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
@@ -530,21 +554,74 @@ def auto_loop():
             if datetime.now(tz) < nxt:
                 continue
             when = datetime.now(tz).isoformat(timespec="minutes")
+            level = logging.INFO
             try:
                 plan, results = run_prune(max_deletes=cfg2["max"])
                 if results is None:
                     n = sum(len(g["Episodes"]) for g in plan)
                     msg = f"Skipped: {n} recordings exceeds the safety cap of {cfg2['max']}. Review and use Apply keep limits."
+                    level = logging.WARNING
                 else:
                     ok = sum(1 for r in results if r["ok"])
                     msg = f"Deleted {ok} of {len(results)} recordings."
+                    if ok < len(results):
+                        level = logging.WARNING
             except Exception as e:
                 msg = f"Failed: {friendly(e)}"
-            _auto["last"] = {"when": when, "summary": msg}
-            app.logger.warning("Auto-prune %s: %s", when, msg)
-        except Exception as e:
-            app.logger.warning("Auto-prune scheduler error: %s", e)
+                level = logging.ERROR
+            log.log(level, "Auto-prune %s: %s", when, msg)
+            write_json(LAST_RUN_PATH, {"when": when, "summary": msg})
+        except Exception:
+            log.exception("Auto-prune scheduler error; retrying in 60 seconds")
             time.sleep(60)
+
+
+# The scheduler is started explicitly, never at import, so tests and the `flask run --debug`
+# reloader's watcher process don't get a stray copy. Under gunicorn, gunicorn.conf.py starts it
+# as soon as the worker boots; under any other server it starts on the first request.
+# A lock file in DATA_DIR makes sure only one process per data directory runs it.
+# Set DVR_SCHEDULER=0 to turn it off entirely (for example in tests).
+_sched = {"state": None}  # None (not tried yet) | "running" | "off"
+_sched_lock = threading.Lock()
+_sched_lockfile = None
+
+
+def start_scheduler():
+    """Start the auto-prune thread once. Returns True if this process runs it."""
+    global _sched_lockfile
+    with _sched_lock:
+        if _sched["state"] is not None:
+            return _sched["state"] == "running"
+        _sched["state"] = "off"
+        if os.environ.get("DVR_SCHEDULER", "1").strip() == "0":
+            log.info("Auto-prune scheduler disabled by DVR_SCHEDULER=0")
+            return False
+        if fcntl is not None:
+            try:
+                os.makedirs(DATA_DIR, exist_ok=True)
+                f = open(os.path.join(DATA_DIR, ".scheduler.lock"), "w")
+            except OSError as e:
+                log.error("Auto-prune scheduler not started: can't write to %s (%s)", DATA_DIR, e)
+                return False
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                f.close()
+                log.info("Another process already runs the auto-prune scheduler for %s", DATA_DIR)
+                return False
+            _sched_lockfile = f  # keep it open: the lock lasts as long as this process
+        threading.Thread(target=auto_loop, name="auto-prune", daemon=True).start()
+        _sched["state"] = "running"
+        cfg = schedule_config()
+        log.info("Auto-prune scheduler started (%s)",
+                 f"next run {next_run_iso(cfg)}" if cfg["enabled"] else "automatic cleanup is off")
+        return True
+
+
+@app.before_request
+def ensure_scheduler():
+    if _sched["state"] is None:
+        start_scheduler()
 
 
 # ---------- routes ----------
@@ -579,9 +656,10 @@ def delete():
 
 @app.get("/api/limits")
 def get_limits():
+    cfg = schedule_config()
     return jsonify({
         "limits": load_limits(),
-        "auto": {**schedule_config(), "next": next_run_iso(schedule_config()), "last": _auto["last"]},
+        "auto": {**cfg, "next": next_run_iso(cfg), "last": load_last_run()},
     })
 
 
@@ -760,6 +838,3 @@ def update_schedule():
     cfg = schedule_config()
     return jsonify({"ok": True, "schedule": cfg, "next": next_run_iso(cfg)})
 
-
-# Start the scheduler last, after everything it uses is defined
-threading.Thread(target=auto_loop, daemon=True).start()
