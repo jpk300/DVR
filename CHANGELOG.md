@@ -7,6 +7,15 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 ## [Unreleased]
 
 ### Added
+- **Keep rules** replace keep limits: keep everything, keep the newest N, or delete watched episodes
+  (optionally keeping the newest N unwatched). Edited in a dialog that previews what the rule would delete.
+- Watched and partly-watched markers on recordings, from the DVR's `Resume` field.
+- **History** tab listing every deletion (when, show, episode, manual / keep rules / automatic, re-record),
+  stored in `data/history.jsonl`. Deletions are also logged.
+- "Delete N now to match this rule" in each show's panel, and recordings the rule would delete are marked.
+- Pop-up messages for results and errors, spinners on busy buttons, and placeholder rows while loading.
+- "Hours" sort and total hours per show; a "Scheduled" tag on shows with no recordings yet.
+- `GET /api/show`, `GET /api/history`, and an optional `series_id` on delete, preview and prune.
 - `LICENSE` (MIT), this changelog, and `CONTRIBUTING.md` describing the branch-and-PR workflow.
 - A Content-Security-Policy, `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on every response.
   The page can't be framed, which blocks clickjacking of the delete buttons.
@@ -18,6 +27,14 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 - Keyboard access: sort tabs, show rows and keep-limit cells work with Tab, Enter and Space.
 
 ### Changed
+- The keep-limit cell is now a clearly clickable "Keep: …" button.
+- Refresh and Apply all keep rules moved into the toolbar above the list (they were under one show's panel).
+- Smaller top bar without the clock; it no longer wraps on phones. Sort labels are shorter ("Count").
+- Dates show "Today" / "Yesterday" / the weekday for the last week, and the year when it isn't this year.
+- Settings: "Use server default" is now "Clear saved address"; the timezone is filled in from your browser
+  until one is saved. The re-record checkbox reads "Let the DVR record these episodes again".
+- Deleting from one show, or applying one show's rule, re-reads only that show from the DVR instead of every show.
+- `limits.json` now stores `{"keep": N, "delete_watched": bool}` per show. Plain numbers from older files still work.
 - The Settings page is more compact: smaller type, inputs and buttons, and tighter spacing.
 - The backend is now the `dvr/` package (`config`, `storage`, `dvr_client`, `pruning`, `scheduler`,
   `routes`). `app.py` is a thin entry point, so `gunicorn app:app` and `flask --app app run` still work.

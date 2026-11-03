@@ -5,11 +5,11 @@ from zoneinfo import available_timezones
 
 from flask import Flask, Response, jsonify, request
 
-from . import scheduler
-from .config import APP_PASS, APP_USER, MAX_DELETE_BATCH, MAX_REQUEST_BYTES
-from .dvr_client import (check_dvr_url, clean_host, delete_urls, dvr_json, engine_info, fetch_all,
-                         fetch_series, friendly, probe, reset_dvr_caches, storage_url)
-from .pruning import PlanChanged, build_plan, run_prune
+from . import history, scheduler
+from .config import APP_PASS, APP_USER, HISTORY_MAX, MAX_DELETE_BATCH, MAX_REQUEST_BYTES
+from .dvr_client import (check_dvr_url, clean_host, delete_urls, dvr_json, engine_info, episode_index,
+                         fetch_all, fetch_one_series, friendly, probe, reset_dvr_caches, storage_url)
+from .pruning import PlanChanged, build_plan, load_shows, normalize_rule, normalized_limits, run_prune
 from .scheduler import TIME_RE, next_run_iso, schedule_config, valid_tz
 from .storage import data_lock, load_last_run, load_limits, load_settings, save_limits, save_settings
 
@@ -71,17 +71,42 @@ def recordings():
         return jsonify({"error": friendly(e)}), 502
 
 
+@app.get("/api/show")
+def show():
+    """One show with its recordings, so the page can refresh it without reloading every show."""
+    sid = request.args.get("series_id") or ""
+    try:
+        s = fetch_one_series(sid)
+    except Exception as e:
+        return jsonify({"error": friendly(e)}), 502
+    if s is None:
+        return jsonify({"error": "The DVR has no recordings of this show"}), 404
+    return jsonify(s)
+
+
 @app.post("/api/delete")
 def delete():
+    """Delete recordings the user picked. With series_id, only that show is re-read from the DVR
+    to check the URLs (two requests instead of one per show), and the updated show is returned."""
     body = request.get_json(silent=True) or {}
     urls = body.get("cmd_urls")
+    sid = body.get("series_id")
     if not isinstance(urls, list) or not all(isinstance(u, str) for u in urls):
         return jsonify({"error": "cmd_urls must be a list of strings"}), 400
+    if sid is not None and not isinstance(sid, str):
+        return jsonify({"error": "series_id must be a string"}), 400
     urls = list(dict.fromkeys(urls))
     if len(urls) > MAX_DELETE_BATCH:
         return jsonify({"error": f"Too many recordings in one request (max {MAX_DELETE_BATCH})"}), 400
+    rerecord = 1 if body.get("rerecord") else 0
     try:
-        return jsonify(delete_urls(urls, 1 if body.get("rerecord") else 0))
+        allowed = episode_index(load_shows(sid)) if sid else None
+        results = delete_urls(urls, rerecord, allowed)
+        history.record(results, "manual", rerecord=bool(rerecord))
+        out = {"results": results}
+        if sid:
+            out["show"] = fetch_one_series(sid)
+        return jsonify(out)
     except Exception as e:
         return jsonify({"error": friendly(e)}), 502
 
@@ -90,52 +115,68 @@ def delete():
 def get_limits():
     cfg = schedule_config()
     return jsonify({
-        "limits": load_limits(),
+        "limits": normalized_limits(),
         "auto": {**cfg, "next": next_run_iso(cfg), "last": load_last_run()},
     })
 
 
 @app.post("/api/limits")
 def set_limit():
-    body = request.get_json(force=True)
+    """Set one show's keep rule: {series_id, keep: N or null, delete_watched: bool}.
+    A rule that keeps everything removes the show's entry."""
+    body = request.get_json(silent=True)
+    if not isinstance(body, dict):
+        return jsonify({"error": "Send a JSON object"}), 400
     key = body.get("series_id")
-    keep = body.get("keep")
-    if not key:
+    if not key or not isinstance(key, str):
         return jsonify({"error": "series_id required"}), 400
+    keep = body.get("keep")
+    if keep in ("", 0):
+        keep = None
+    if keep is not None:
+        try:
+            if isinstance(keep, bool):
+                raise ValueError
+            keep = int(keep)
+            if keep < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return jsonify({"error": "Keep must be a whole number, 1 or more"}), 400
+    rule = normalize_rule({"keep": keep, "delete_watched": bool(body.get("delete_watched"))})
     with data_lock:
         limits = load_limits()
-        if keep in (None, "", 0):
-            limits.pop(key, None)
+        if rule:
+            limits[key] = rule
         else:
-            try:
-                keep = int(keep)
-                if keep < 1:
-                    raise ValueError
-            except (TypeError, ValueError):
-                return jsonify({"error": "keep must be a whole number >= 1"}), 400
-            limits[key] = keep
+            limits.pop(key, None)
         save_limits(limits)
-    return jsonify({"limits": limits})
+    return jsonify({"limits": normalized_limits(limits)})
 
 
 @app.get("/api/prune/preview")
 def prune_preview():
+    """What the keep rules would delete now, for every show or only ?series_id=."""
+    sid = request.args.get("series_id") or None
     try:
-        return jsonify(build_plan(fetch_series(), load_limits()))
+        return jsonify(build_plan(load_shows(sid), load_limits(), only=sid))
     except Exception as e:
         return jsonify({"error": friendly(e)}), 502
 
 
 @app.post("/api/prune")
 def prune_now():
-    """Run the prune the user reviewed. The body must list the exact CmdURLs from the preview;
-    if the DVR's recordings changed since then, nothing is deleted and the new plan is returned."""
+    """Run the plan the user reviewed. The body must list the exact CmdURLs from the preview
+    (and the same series_id, if the preview was for one show); if the DVR's recordings changed
+    since then, nothing is deleted and the new plan is returned."""
     body = request.get_json(silent=True)
     urls = body.get("cmd_urls") if isinstance(body, dict) else None
+    sid = body.get("series_id") if isinstance(body, dict) else None
     if not isinstance(urls, list) or not urls or not all(isinstance(u, str) for u in urls):
-        return jsonify({"error": "Preview the keep limits first, then confirm the list"}), 400
+        return jsonify({"error": "Preview the keep rules first, then confirm the list"}), 400
+    if sid is not None and not isinstance(sid, str):
+        return jsonify({"error": "series_id must be a string"}), 400
     try:
-        plan, results = run_prune(confirmed=urls)
+        plan, results = run_prune(confirmed=urls, series_id=sid)
         return jsonify({"plan": plan, "results": results})
     except PlanChanged as e:
         return jsonify({"error": "The recordings changed since you reviewed them. Review the updated list.",
@@ -182,7 +223,18 @@ def get_settings():
         "source": "ui" if saved else "env" if env else "none",
         "env_dvr_host": env,
         "schedule": schedule_config(),
+        "tz_saved": bool(load_settings().get("timezone")),
     })
+
+
+@app.get("/api/history")
+def get_history():
+    """Recent deletions, newest first (?limit=, default and max HISTORY_MAX)."""
+    try:
+        limit = max(1, min(HISTORY_MAX, int(request.args.get("limit", HISTORY_MAX))))
+    except ValueError:
+        limit = HISTORY_MAX
+    return jsonify({"entries": history.load(limit), "max": HISTORY_MAX})
 
 
 @lru_cache(maxsize=1)

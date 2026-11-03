@@ -1,6 +1,6 @@
 # HDHomeRun DVR Manager
 
-A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.com/hdhomerun.html) DVR. Set how many recordings to keep of each show, delete recordings from a browser, and let the oldest ones clear out automatically once a day.
+A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.com/hdhomerun.html) DVR. Set a keep rule for each show (keep the newest N, or clear out what you've watched), delete recordings from a browser, and let the cleanup run automatically once a day.
 
 > Unofficial. Not affiliated with or endorsed by Silicondust. Deleting a recording is permanent, so try it on a throwaway recording first.
 
@@ -8,9 +8,11 @@ A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.c
 
 - Browse every show and its recordings, with posters, synopses, and used / free disk space
 - Delete one or many recordings, with an optional **re-record** flag
-- **Per-show keep limits**: "keep the latest N recordings of this show"
-- Limits can be set for shows that are **scheduled but have no recordings yet**
-- **Apply keep limits** button with a preview and confirmation before anything is deleted
+- **Per-show keep rules**: keep everything, keep the newest N, or delete watched episodes (optionally keeping only the newest N unwatched)
+- **Watched status** shown on each recording, when the DVR reports it
+- Rules can be set for shows that are **scheduled but have no recordings yet**
+- **Apply all keep rules**, or apply one show's rule from its panel, always with a preview and confirmation first
+- **Deletion history**: every deletion, with when, which episode, how it was triggered and whether it will re-record
 - **Automatic daily cleanup** at a time you choose, with a safety cap
 - **Settings tab** to change the DVR address from the browser, with a connection test
 - Dark UI inspired by the HDHomeRun app's own Tasks screen
@@ -31,7 +33,7 @@ Open `http://localhost:8080` (or `http://<server-ip>:8080` if it runs on another
 
 Open the **Settings** tab and enter your DVR's IP address, then use **Test connection** and **Save & apply**.
 
-Your keep limits, settings and the result of the last automatic run are stored in `./data` (mounted into the container), so they survive rebuilds.
+Your keep rules, settings, deletion history and the result of the last automatic run are stored in `./data` (mounted into the container), so they survive rebuilds.
 
 ## Configuration
 
@@ -52,13 +54,18 @@ Automatic cleanup (on/off, daily time, timezone and safety cap) is configured on
 
 If no DVR address is set anywhere, the app falls back to Silicondust's cloud discovery, which only works when you share a public IP with the DVR.
 
-## How keep limits work
+## How keep rules work
 
-1. Type a number in a show's right-hand cell (it reads "All Episodes" until you do).
-2. Recordings are ranked by start time. The newest N are kept and the older ones are removed.
-3. Click **Apply keep limits** to preview and confirm, or let the daily run handle it.
+1. Click a show's **Keep: All** button and pick a rule:
+   - **Keep everything**: nothing is deleted automatically (the default).
+   - **Keep the newest N**: recordings are ranked by start time; older ones are deleted.
+   - **Delete watched episodes**: every watched recording is deleted. Optionally also keep only the newest N unwatched ones.
+2. The list shows how many recordings each rule would delete, and the show's panel marks them.
+3. Click **Apply all keep rules**, or **Delete N now** in one show's panel, to preview and confirm. Or let the daily run handle it.
 
-Automatic and manual cleanups delete **without** re-record, so the DVR remembers those episodes as already recorded and won't record them again. Limits are tied to each show, not to the DVR address, so they carry over if you point the app at a different DVR.
+"Watched" comes from the DVR's `Resume` field (playback position), which the DVR sets to `4294967295` once an episode has been watched to the end. Recordings whose watched status the DVR doesn't report are treated as unwatched, so a watched rule never deletes them. Check what your DVR reports with `/api/debug`.
+
+Keep-rule cleanups delete **without** re-record, so the DVR remembers those episodes as already recorded and won't record them again. Rules are tied to each show, not to the DVR address, so they carry over if you point the app at a different DVR. Older `limits.json` files that store a plain number still work and mean "keep the newest N".
 
 ## Run without Docker
 
@@ -96,6 +103,7 @@ The DVR doesn't report per-recording file sizes, so "Used on drive" is total spa
 - **See what your DVR actually returns:** open `/api/debug` (first show and first episode, with credentials removed).
 - **Scheduled shows missing:** check `docker logs hdhr-dvr-manager` for a "Could not load recording rules" warning.
 - **Check the automatic run:** the Manage page shows the next and last run; details are in `docker logs hdhr-dvr-manager`.
+- **Where did an episode go?** The **History** tab lists every deletion this app has made, newest first (the last 1000 are kept in `data/history.jsonl`).
 
 ## Project layout
 
@@ -104,6 +112,7 @@ app.py               Entry point (gunicorn app:app / flask --app app run)
 dvr/                 Backend package
   config.py            environment variables, tunables, logging
   storage.py           JSON files in DATA_DIR
+  history.py           the deletion history
   dvr_client.py        all DVR and cloud requests, with the SSRF guard
   pruning.py           keep-limit plans and pruning
   scheduler.py         daily automatic cleanup
@@ -113,7 +122,7 @@ requirements.txt     Python dependencies
 Dockerfile           Container image
 gunicorn.conf.py     gunicorn settings (one worker) and the scheduler start-up hook
 docker-compose.yml   Example deployment
-data/                Created at runtime: limits.json, settings.json, last_run.json (not committed)
+data/                Created at runtime: limits.json, settings.json, last_run.json, history.jsonl (not committed)
 ```
 
 ## Contributing
