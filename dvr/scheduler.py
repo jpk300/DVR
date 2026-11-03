@@ -88,10 +88,10 @@ def auto_loop():
             when = datetime.now(tz).isoformat(timespec="minutes")
             level = logging.INFO
             try:
-                plan, results = run_prune(max_deletes=cfg2["max"])
+                plan, results = run_prune(max_deletes=cfg2["max"], source="auto")
                 if results is None:
                     n = sum(len(g["Episodes"]) for g in plan)
-                    msg = f"Skipped: {n} recordings exceeds the safety cap of {cfg2['max']}. Review and use Apply keep limits."
+                    msg = f"Skipped: {n} recordings exceeds the safety cap of {cfg2['max']}. Review them and use Apply all keep rules."
                     level = logging.WARNING
                 else:
                     ok = sum(1 for r in results if r["ok"])

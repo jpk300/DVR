@@ -16,6 +16,8 @@ DATA_DIR = os.environ.get("DATA_DIR", "/data")
 LIMITS_PATH = os.path.join(DATA_DIR, "limits.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
 LAST_RUN_PATH = os.path.join(DATA_DIR, "last_run.json")
+HISTORY_PATH = os.path.join(DATA_DIR, "history.jsonl")
+HISTORY_MAX = 1000                # most deletions history keeps
 
 # ---------- tunables ----------
 DVR_TIMEOUT = (3.05, 10)          # (connect, read) seconds for every DVR request

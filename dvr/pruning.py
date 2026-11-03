@@ -1,5 +1,14 @@
-"""Keep limits: work out which recordings fall beyond each show's limit, and delete them."""
-from .dvr_client import delete_urls, fetch_series
+"""Keep rules: work out which recordings each show's rule says to remove, and delete them.
+
+A rule is {"keep": N or None, "delete_watched": bool}:
+  * keep N                    -> keep the newest N recordings, delete older ones
+  * delete_watched            -> delete every watched recording, keep all unwatched ones
+  * delete_watched + keep N   -> delete watched recordings, and keep only the newest N unwatched
+Shows with no rule keep everything. Recordings whose watched status the DVR doesn't report
+are treated as unwatched, so a watched rule never deletes them.
+"""
+from . import history
+from .dvr_client import delete_urls, episode_index, fetch_one_series, fetch_series
 from .storage import data_lock, load_limits
 
 
@@ -7,49 +16,106 @@ def series_key(s):
     return s.get("SeriesID") or s.get("Title")
 
 
-def build_plan(series, limits):
-    """For each series with a limit, list the oldest episodes beyond the newest N."""
+def normalize_rule(value):
+    """A stored rule as {"keep": int | None, "delete_watched": bool}, or None for "keep everything".
+    Older limits.json files store a bare number, which means "keep the newest N"."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return {"keep": value, "delete_watched": False} if value >= 1 else None
+    if isinstance(value, dict):
+        keep = value.get("keep")
+        if isinstance(keep, bool) or not isinstance(keep, int) or keep < 1:
+            keep = None
+        watched = bool(value.get("delete_watched"))
+        if keep is None and not watched:
+            return None
+        return {"keep": keep, "delete_watched": watched}
+    return None
+
+
+def normalized_limits(limits=None):
+    """Every stored rule in the current format (rules that mean "keep everything" are dropped)."""
+    limits = load_limits() if limits is None else limits
+    out = {}
+    for k, v in limits.items():
+        rule = normalize_rule(v)
+        if rule:
+            out[k] = rule
+    return out
+
+
+def to_delete(episodes, rule):
+    """(episode, reason) pairs the rule removes, oldest first."""
+    eps = sorted(episodes, key=lambda e: e.get("StartTime") or 0, reverse=True)
+    doomed = []
+    if rule["delete_watched"]:
+        doomed += [(e, "watched") for e in eps if e.get("Watched") is True]
+        eps = [e for e in eps if e.get("Watched") is not True]
+    if rule["keep"]:
+        doomed += [(e, "older than the newest %d" % rule["keep"]) for e in eps[rule["keep"]:]]
+    return sorted(doomed, key=lambda d: d[0].get("StartTime") or 0)
+
+
+def build_plan(series, limits, only=None):
+    """For each show with a rule (or just the show `only`), list the recordings it removes."""
     plan = []
     for s in series:
-        n = limits.get(series_key(s))
-        if not n:
+        if only is not None and series_key(s) != only:
             continue
-        eps = sorted(s["Episodes"], key=lambda e: e.get("StartTime") or 0, reverse=True)
-        extra = eps[n:]
-        if extra:
+        rule = normalize_rule(limits.get(series_key(s)))
+        if not rule:
+            continue
+        doomed = to_delete(s["Episodes"], rule)
+        if doomed:
             plan.append({
                 "SeriesID": series_key(s),
                 "Title": s["Title"],
-                "Keep": n,
+                "Rule": rule,
+                "Keep": rule["keep"],
                 "Episodes": [{
                     "EpisodeTitle": e.get("EpisodeTitle") or e.get("Title"),
+                    "EpisodeNumber": e.get("EpisodeNumber"),
                     "StartTime": e.get("StartTime"),
                     "CmdURL": e.get("CmdURL"),
-                } for e in extra],
+                    "Reason": reason,
+                } for e, reason in doomed],
             })
     return plan
 
 
+def load_shows(series_id=None):
+    """All shows, or just one (two DVR requests instead of one per show)."""
+    if series_id is None:
+        return fetch_series()
+    s = fetch_one_series(series_id)
+    return [s] if s else []
+
+
 class PlanChanged(Exception):
-    """The fresh prune plan no longer matches the one the user confirmed."""
+    """The fresh plan no longer matches the one the user confirmed."""
     def __init__(self, plan):
         super().__init__("plan changed")
         self.plan = plan
 
 
-def run_prune(max_deletes=None, confirmed=None):
-    """Delete recordings beyond each show's limit. Returns (plan, results);
-    results is None if the run was skipped for exceeding max_deletes.
+def run_prune(max_deletes=None, confirmed=None, series_id=None, source="keep-rules"):
+    """Delete what the keep rules remove, for every show or only `series_id`.
+    Returns (plan, results); results is None if the run was skipped for exceeding max_deletes.
     If `confirmed` is given (the CmdURLs the user reviewed), the fresh plan must match it
     exactly, otherwise PlanChanged is raised and nothing is deleted."""
     with data_lock:
-        plan = build_plan(fetch_series(), load_limits())
+        series = load_shows(series_id)
+        plan = build_plan(series, load_limits(), only=series_id)
         urls = [e["CmdURL"] for g in plan for e in g["Episodes"] if e.get("CmdURL")]
         if confirmed is not None and set(urls) != set(confirmed):
             raise PlanChanged(plan)
         if max_deletes and len(urls) > max_deletes:
             return plan, None
+        if not urls:
+            return plan, []
         # the URLs came from the fresh listing above, so they are the allowed set
-        results = delete_urls(urls, rerecord=0, allowed=set(urls)) if urls else []
+        index = episode_index(series)
+        results = delete_urls(urls, rerecord=0, allowed={u: index[u] for u in urls})
+        history.record(results, source)
         return plan, results
-

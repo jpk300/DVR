@@ -245,6 +245,21 @@ def engine_info():
 EP_FIELDS = ("ProgramID", "Title", "EpisodeTitle", "EpisodeNumber", "Synopsis",
              "StartTime", "EndTime", "RecordStartTime", "RecordEndTime", "CmdURL")
 
+# The DVR reports playback progress as Resume (seconds into the recording). It sets Resume to
+# this value once an episode has been watched to the end.
+RESUME_WATCHED = 4294967295
+
+
+def watched_fields(ep):
+    """Watched: True / False, or None when the DVR doesn't report progress for this recording.
+    ResumeSeconds: how far into a partly watched recording playback got (else None)."""
+    r = ep.get("Resume")
+    if isinstance(r, bool) or not isinstance(r, int):
+        return {"Watched": None, "ResumeSeconds": None}
+    if r == RESUME_WATCHED:
+        return {"Watched": True, "ResumeSeconds": None}
+    return {"Watched": False, "ResumeSeconds": r if r > 0 else None}
+
 
 def _load_series(s):
     entry = {"SeriesID": s.get("SeriesID"), "Title": s.get("Title"),
@@ -268,18 +283,44 @@ def _load_series(s):
         except Exception:
             skipped += 1
             continue
-        entry["Episodes"].append({k: ep.get(k) for k in EP_FIELDS})
+        entry["Episodes"].append({**{k: ep.get(k) for k in EP_FIELDS}, **watched_fields(ep)})
     if skipped:
         log.warning("Hid %d recording(s) of %r with unexpected URLs", skipped, s.get("Title"))
     return entry
 
 
+def _series_list():
+    """The DVR's list of shows. Uses the cached record-engine URL, and only re-discovers it
+    (one extra request) if that fails, for example because the DVR got a new IP address."""
+    if "url" in _storage_cache:
+        try:
+            return [s for s in dvr_json(storage_url(), list) if isinstance(s, dict)]
+        except Exception as e:
+            log.info("Cached record engine URL failed (%s); discovering it again", friendly(e))
+    return [s for s in dvr_json(storage_url(refresh=True), list) if isinstance(s, dict)]
+
+
 def fetch_series():
     """Every show with its recordings, loaded with bounded concurrency. A show that fails
     to load comes back with an Error and no recordings instead of failing the whole list."""
-    series = dvr_json(storage_url(refresh=True), list)
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        return list(ex.map(_load_series, [s for s in series if isinstance(s, dict)]))
+        return list(ex.map(_load_series, _series_list()))
+
+
+def fetch_one_series(series_id):
+    """One show with its recordings (two DVR requests), or None if the DVR has no recordings of it."""
+    for s in _series_list():
+        if s.get("SeriesID") == series_id:
+            return _load_series(s)
+    return None
+
+
+def episode_index(series):
+    """Map each recording's CmdURL to what history needs to describe it."""
+    return {e["CmdURL"]: {"Show": s.get("Title"), "SeriesID": s.get("SeriesID"),
+                          "EpisodeTitle": e.get("EpisodeTitle") or e.get("Title"),
+                          "EpisodeNumber": e.get("EpisodeNumber"), "StartTime": e.get("StartTime")}
+            for s in series for e in s["Episodes"] if e.get("CmdURL")}
 
 
 def device_auth():
@@ -336,21 +377,26 @@ def fetch_all(fresh=False):
 
 
 def delete_urls(cmd_urls, rerecord=0, allowed=None):
-    """Delete recordings. Only URLs that appear in a fresh server-side DVR listing are accepted,
-    and each must still pass the scheme / host / port / path checks."""
+    """Delete recordings. `allowed` maps each deletable CmdURL to its details (episode_index());
+    it must come from a fresh server-side DVR listing, and is built from all shows if not given.
+    URLs not in it are refused, and each must still pass the scheme / host / port / path checks.
+    Each result carries the recording's details, and attempted=False if it was refused."""
     if allowed is None:
-        allowed = {e["CmdURL"] for s in fetch_series() for e in s["Episodes"] if e.get("CmdURL")}
+        allowed = episode_index(fetch_series())
     results = []
     for u in cmd_urls:
         if u not in allowed:
-            results.append({"cmd_url": u, "ok": False, "error": "not a current recording on the DVR"})
+            results.append({"cmd_url": u, "ok": False, "attempted": False,
+                            "error": "not a current recording on the DVR"})
             continue
+        meta = allowed[u]
         try:
             check_dvr_url(u, "/recorded/cmd")
             status, _ = dvr_fetch(u, method="POST", params={"cmd": "delete", "rerecord": rerecord})
-            results.append({"cmd_url": u, "ok": status < 400, "status": status})
+            results.append({"cmd_url": u, "ok": status < 400, "attempted": True, "status": status,
+                            **({} if status < 400 else {"error": f"the DVR returned HTTP {status}"}), **meta})
         except Exception as e:
-            results.append({"cmd_url": u, "ok": False, "error": friendly(e)})
+            results.append({"cmd_url": u, "ok": False, "attempted": True, "error": friendly(e), **meta})
     invalidate_list_cache()
     return results
 
