@@ -1,7 +1,9 @@
+# Leading **/ matches in every folder, not just the top level
 .git
 .gitignore
 .venv
-__pycache__
+**/__pycache__
+**/*.pyc
+**/.DS_Store
 data
 README.md
-.DS_Store
