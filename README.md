@@ -22,8 +22,8 @@ A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.c
 Requires Docker with Compose.
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/hdhr-dvr-manager.git
-cd hdhr-dvr-manager
+git clone https://github.com/jpk300/DVR.git
+cd DVR
 docker compose up -d --build
 ```
 
@@ -87,6 +87,7 @@ The DVR doesn't report per-recording file sizes, so "Used on drive" is total spa
 - **The DVR must be on a private network.** Every address the DVR hostname resolves to must be in an allowed range (see `DVR_ALLOWED_NETWORKS`), so the app can't be pointed at the internet or at a loopback/link-local address such as a cloud metadata service.
 - **DNS and redirects are handled.** The app resolves the hostname itself, connects to that exact validated IP (so a DNS change between check and use can't redirect it), never follows HTTP redirects, ignores proxy environment variables for DVR traffic, and caps response sizes and request time.
 - URLs inside DVR responses (episode lists, delete commands) are validated the same way before they are used, and images are only shown if their URL is `http(s)`.
+- **The page runs under a strict Content-Security-Policy.** Scripts and styles load only from the app itself, and the page can't be framed by another site (which blocks clickjacking).
 - Your DVR's `DeviceAuth` is a credential for Silicondust's cloud services. `/api/debug` strips it, but don't paste raw DVR data publicly.
 
 ## Troubleshooting
@@ -99,11 +100,27 @@ The DVR doesn't report per-recording file sizes, so "Used on drive" is total spa
 ## Project layout
 
 ```
-app.py               Flask backend (DVR access, limits, pruning, settings)
-static/index.html    Single-file web UI
+app.py               Entry point (gunicorn app:app / flask --app app run)
+dvr/                 Backend package
+  config.py            environment variables, tunables, logging
+  storage.py           JSON files in DATA_DIR
+  dvr_client.py        all DVR and cloud requests, with the SSRF guard
+  pruning.py           keep-limit plans and pruning
+  scheduler.py         daily automatic cleanup
+  routes.py            Flask app, HTTP API, security headers
+static/              Web UI: index.html, app.js, app.css
 requirements.txt     Python dependencies
 Dockerfile           Container image
 gunicorn.conf.py     gunicorn settings (one worker) and the scheduler start-up hook
 docker-compose.yml   Example deployment
 data/                Created at runtime: limits.json, settings.json, last_run.json (not committed)
 ```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branch-and-pull-request workflow and commit message style,
+and [CHANGELOG.md](CHANGELOG.md) for what has changed.
+
+## License
+
+[MIT](LICENSE)
