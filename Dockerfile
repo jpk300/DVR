@@ -3,6 +3,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py gunicorn.conf.py ./
+COPY dvr dvr
 COPY static static
 RUN mkdir -p /data
 EXPOSE 8080
