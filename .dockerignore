@@ -7,3 +7,5 @@
 **/.DS_Store
 data
 README.md
+node_modules
+.github

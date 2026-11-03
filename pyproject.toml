@@ -1,0 +1,9 @@
+# Tool settings only; the app is run with gunicorn (see Dockerfile), not installed as a package.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 125
+
+[tool.ruff.lint]
+# pyflakes, pycodestyle errors and warnings, import sorting, and common bug patterns
+select = ["F", "E", "W", "I", "B"]
