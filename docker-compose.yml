@@ -6,18 +6,11 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data:/data          # stores your per-show keep limits (limits.json)
+      - ./data:/data          # stores your keep limits and settings (limits.json, settings.json)
     environment:
+      # First-run default for the DVR address. You can change it later in the app's Settings tab.
       DVR_HOST: "192.168.1.130"
-      # Your timezone, so the daily run happens when you expect:
-      TZ: "America/Chicago"
-      # Run the keep-limit cleanup once a day at this local time (HH:MM, 24h). Empty = manual only.
-      AUTO_PRUNE_TIME: "03:00"
-      # Safety cap: if an automatic run would delete more than this many recordings,
-      # it skips and waits for you to review and click "Apply keep limits".
-      AUTO_PRUNE_MAX: "25"
-      # Optional: point straight at the record engine's JSON instead of DVR_HOST:
-      # DVR_STORAGE_URL: "http://192.168.1.130:PORT/recorded_files.json"
+      # The daily cleanup schedule, timezone and safety cap are set in the app's Settings tab.
       # Optional basic auth:
       # APP_USER: "admin"
       # APP_PASS: "change-me"

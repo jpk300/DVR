@@ -20,7 +20,7 @@
   .top nav { display: flex; align-items: center; flex: 1; flex-wrap: wrap; }
   .top nav > * { font-size: 2rem; font-weight: 500; letter-spacing: -.01em; padding: 0 1.1rem; background: none; border: 0;
                  border-left: 2px solid #444; line-height: 1.1; cursor: pointer; color: var(--muted); }
-  .top nav > *:first-child { border-left: 0; padding-left: 0; color: var(--text); cursor: default; }
+  .top nav > *:first-child { border-left: 0; padding-left: 0; color: #529642; font-weight: 800; cursor: default; }
   .top nav > button:hover { color: var(--text); }
   #clock { font-size: 1.9rem; color: #cfcfcf; }
 
@@ -73,7 +73,7 @@
   [hidden] { display: none !important; }
   /* green pill buttons under the poster */
   .gbtns { display: flex; flex-direction: column; gap: .6rem; margin: 1rem 0 0; }
-  .gbtn { display: block; width: 100%; padding: .85rem 1rem; border: 0; border-radius: 999px; background: #9bc453; color: #fff;
+  .gbtn { display: block; width: 100%; padding: .85rem 1rem; border: 0; border-radius: 999px; background: #529642; color: #fff;
           font-weight: 800; font-size: 1rem; letter-spacing: .03em; text-transform: uppercase; cursor: pointer; }
   .gbtn:hover { filter: brightness(1.08); }
   .gbtn:active { filter: brightness(.95); }
@@ -90,6 +90,33 @@
   .btn.primary { background: var(--sel); font-weight: 600; }
   #hostMsg { margin-top: 1rem; min-height: 1.4rem; }
   .good { color: var(--ok); } .bad { color: #ff8a8a; }
+  /* settings: schedule card */
+  .card input[type=time], .card input[type=number] { width: 100%; font: inherit; font-size: 1.1rem; padding: .65rem .8rem; border-radius: 10px;
+                           border: 2px solid #444; background: #1b1b1b; color: var(--text); outline: 0; }
+  .card input[type=time]:focus, .card input[type=number]:focus { border-color: var(--sel); }
+  .card label.chk { display: flex; gap: .6rem; align-items: center; text-transform: none; letter-spacing: 0; font-size: 1.05rem; color: var(--text); margin-bottom: 0; }
+  .fields { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: .8rem; margin-top: 1rem; }
+  .mhint, .mclose, #topbtns { display: none; }
+
+  /* phones and narrow windows: list first, details in a full-screen sheet */
+  @media (max-width: 860px) {
+    .top { padding: .8rem 1rem .4rem; gap: .5rem; }
+    .layout { padding: .4rem 1rem 3rem; }
+    #settings-view { padding: .4rem 1rem 3rem; }
+    .fields { grid-template-columns: 1fr; }
+    .mhint { display: block; margin-top: .2rem; }
+    #topbtns { display: block; margin-bottom: .9rem; }
+    #topbtns .gbtns { flex-direction: row; margin: 0; }
+    #topbtns .gbtn { font-size: .8rem; padding: .7rem .4rem; }
+    #sidebtns { display: none; }
+    #side { position: fixed; inset: 0; z-index: 30; background: var(--bg); padding: 1rem; overflow-y: auto; display: none; }
+    body.sheet-open #side { display: block; }
+    body.sheet-open { overflow: hidden; }
+    .mclose { display: block; width: 100%; margin-bottom: .8rem; }
+    .eps { max-height: none; }
+    .tabs { gap: 1rem; } .tabs a { font-size: 1.15rem; }
+    .search { min-width: 0; width: 100%; }
+  }
 </style>
 </head>
 <body>
@@ -105,10 +132,12 @@
 <div id="main-view">
 <div class="layout">
   <aside id="side">
+    <button class="btn mclose" id="mclose">← Back to shows</button>
     <div id="panel"></div>
     <div id="sidebtns"></div>
   </aside>
   <section>
+    <div id="topbtns"></div>
     <div class="subbar">
       <div class="tabs" id="tabs">
         <a data-sort="title" class="on">Title</a>
@@ -141,6 +170,23 @@
     </div>
     <div id="hostMsg"></div>
   </div>
+
+  <div class="card" style="margin-top:1rem">
+    <h2>Automatic cleanup</h2>
+    <p class="help">Once a day, delete the oldest recordings beyond each show's keep limit. Changes apply as soon as you save.</p>
+    <label class="chk"><input type="checkbox" id="auto-on"> Run cleanup automatically every day</label>
+    <div class="fields">
+      <div><label for="auto-time">Time</label><input type="time" id="auto-time"></div>
+      <div><label for="auto-tz">Timezone</label>
+        <input type="text" id="auto-tz" list="tzlist" placeholder="America/Chicago" autocomplete="off" spellcheck="false">
+        <datalist id="tzlist"></datalist></div>
+      <div><label for="auto-max">Safety cap</label><input type="number" id="auto-max" min="1"></div>
+    </div>
+    <p class="help" style="margin-top:.8rem">If a run would delete more than the safety cap, it skips and waits for you to review and press Apply keep limits.
+      <button class="link" id="tz-browser" style="margin-left:.4rem">Use my browser's timezone</button></p>
+    <div class="btns"><button class="btn primary" id="auto-save">Save schedule</button></div>
+    <div id="autoMsg"></div>
+  </div>
 </div>
 
 <script>
@@ -156,6 +202,7 @@ const fmtSize = b => b >= 1e12 ? (b/1e12).toFixed(2)+" TB" : b >= 1e9 ? (b/1e9).
 const fmtDate = t => t ? new Date(t*1000).toLocaleString([], {month: "short", day: "numeric", hour: "numeric", minute: "2-digit"}) : "";
 const newest = s => Math.max(0, ...s.Episodes.map(e => e.StartTime || 0));
 const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+const isMobile = () => window.matchMedia("(max-width: 860px)").matches;
 const status = t => $("status").textContent = t || "";
 
 function tickClock() { $("clock").textContent = new Date().toLocaleTimeString([], {hour: "numeric", minute: "2-digit"}); }
@@ -216,7 +263,7 @@ function renderList() {
     cell.title = "Click to set how many recordings to keep";
     cell.onclick = e => { e.stopPropagation(); current = key(s); editCell(cell, s); renderPanel(); };
     row.append(cnt, ttl, cell);
-    row.onclick = () => { current = key(s); renderList(); renderPanel(); };
+    row.onclick = () => { current = key(s); renderList(); renderPanel(); if (isMobile()) document.body.classList.add("sheet-open"); };
     list.append(row);
   }
 }
@@ -283,6 +330,7 @@ function renderInfo() {
   const parts = [plural(data.length, "show"), plural(data.reduce((a, s) => a + s.Episodes.length, 0), "recording")];
   if (totalBytes != null && freeBytes != null) parts.push(`${fmtSize(totalBytes - freeBytes)} used`, `${fmtSize(freeBytes)} free`);
   box.append(el("div", null, parts.join(" · ")));
+  box.append(el("div", "mhint", "Tap a show to see its recordings. Tap its right-hand cell to set how many to keep."));
   const a = autoInfo, line = el("div", "auto");
   if (a && a.enabled) {
     line.append(el("span", "ok", "✓ Automatic cleanup on"));
@@ -367,6 +415,11 @@ async function loadSettings() {
     j.source === "env" ? `Using the server default (${j.env_dvr_host}).` :
     "No address set. The app will try Silicondust cloud discovery.";
   setMsg("");
+  const sc = j.schedule;
+  $("auto-on").checked = sc.enabled; $("auto-time").value = sc.time; $("auto-tz").value = sc.tz; $("auto-max").value = sc.max;
+  const dl = $("tzlist");
+  if (!dl.children.length) for (const z of j.timezones) { const o = document.createElement("option"); o.value = z; dl.append(o); }
+  setAutoMsg("");
 }
 
 async function submitHost(mode) {   // "test" | "save" | "reset"
@@ -382,6 +435,21 @@ async function submitHost(mode) {   // "test" | "save" | "reset"
   setMsg(mode === "reset" ? "✓ Back to the server default." : "✓ Saved and applied: " + deviceLine(j.device), "good");
   load();
 }
+const setAutoMsg = (t, cls) => { const m = $("autoMsg"); m.textContent = t || ""; m.className = cls || ""; };
+async function saveSchedule() {
+  setAutoMsg("Saving…");
+  const r = await fetch("api/settings/schedule", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({enabled: $("auto-on").checked, time: $("auto-time").value,
+                          tz: $("auto-tz").value.trim(), max: parseInt($("auto-max").value, 10)})
+  });
+  const j = await r.json();
+  if (!r.ok) { setAutoMsg("✗ " + j.error, "bad"); return; }
+  setAutoMsg(j.schedule.enabled ? "✓ Saved. Next run: " + new Date(j.next).toLocaleString() : "✓ Saved. Automatic cleanup is off.", "good");
+  load();
+}
+$("auto-save").onclick = saveSchedule;
+$("tz-browser").onclick = () => { $("auto-tz").value = Intl.DateTimeFormat().resolvedOptions().timeZone; };
 $("tab-manage").onclick = () => showView("main");
 $("tab-settings").onclick = () => showView("settings");
 $("host-test").onclick = () => submitHost("test");
@@ -390,6 +458,8 @@ $("host-reset").onclick = () => submitHost("reset");
 $("host").onkeydown = e => { if (e.key === "Enter") submitHost("save"); };
 
 $("sidebtns").append(globalButtons());
+$("topbtns").append(globalButtons());
+$("mclose").onclick = () => document.body.classList.remove("sheet-open");
 load();
 </script>
 </body>

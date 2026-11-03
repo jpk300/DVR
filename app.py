@@ -4,7 +4,7 @@ import re
 import threading
 import time
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, available_timezones
 from urllib.parse import urlparse
 
 import requests
@@ -20,9 +20,6 @@ APP_PASS = os.environ.get("APP_PASS")
 DATA_DIR = os.environ.get("DATA_DIR", "/data")
 LIMITS_PATH = os.path.join(DATA_DIR, "limits.json")
 SETTINGS_PATH = os.path.join(DATA_DIR, "settings.json")
-AUTO_PRUNE_TIME = os.environ.get("AUTO_PRUNE_TIME", "")  # "HH:MM" once a day, e.g. "03:00"; empty = manual only
-AUTO_PRUNE_MAX = int(os.environ.get("AUTO_PRUNE_MAX", "25"))  # safety cap per automatic run
-TZNAME = os.environ.get("TZ", "UTC")
 _lock = threading.Lock()
 
 
@@ -187,7 +184,29 @@ def run_prune(max_deletes=None):
         return plan, results
 
 
-_auto = {"next": None, "last": None}
+_auto = {"last": None}
+_wake = threading.Event()  # set when the schedule is saved so the scheduler re-reads it right away
+TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def valid_tz(name):
+    try:
+        ZoneInfo(name)
+        return True
+    except Exception:
+        return False
+
+
+def schedule_config():
+    """Schedule from the Settings tab; environment variables act as first-run defaults."""
+    st = load_settings()
+    env_time = os.environ.get("AUTO_PRUNE_TIME", "")
+    return {
+        "enabled": bool(st["auto_prune_enabled"]) if "auto_prune_enabled" in st else bool(env_time),
+        "time": st.get("auto_prune_time") or env_time or "03:00",
+        "tz": st.get("timezone") or os.environ.get("TZ") or "UTC",
+        "max": int(st.get("auto_prune_max") or os.environ.get("AUTO_PRUNE_MAX") or 25),
+    }
 
 
 def next_run(now, hh, mm):
@@ -195,35 +214,52 @@ def next_run(now, hh, mm):
     return t if t > now else t + timedelta(days=1)
 
 
-def auto_loop(hh, mm):
-    tz = ZoneInfo(TZNAME)
+def next_run_iso(cfg):
+    if not (cfg["enabled"] and TIME_RE.match(cfg["time"]) and valid_tz(cfg["tz"])):
+        return None
+    hh, mm = (int(x) for x in cfg["time"].split(":"))
+    return next_run(datetime.now(ZoneInfo(cfg["tz"])), hh, mm).isoformat()
+
+
+def auto_loop():
+    """Sleeps until the next scheduled run, waking at least hourly to re-read the schedule."""
     while True:
-        now = datetime.now(tz)
-        nxt = next_run(now, hh, mm)
-        _auto["next"] = nxt.isoformat()
-        time.sleep(max(1, (nxt - now).total_seconds()))
-        when = datetime.now(tz).isoformat(timespec="minutes")
         try:
-            plan, results = run_prune(max_deletes=AUTO_PRUNE_MAX)
-            if results is None:
-                n = sum(len(g["Episodes"]) for g in plan)
-                msg = f"Skipped: {n} recordings exceeds the safety cap of {AUTO_PRUNE_MAX}. Review and use Apply keep limits."
-            else:
-                ok = sum(1 for r in results if r["ok"])
-                msg = f"Deleted {ok} of {len(results)} recordings."
+            cfg = schedule_config()
+            nxt = tz = None
+            wait = 3600
+            if cfg["enabled"] and TIME_RE.match(cfg["time"]) and valid_tz(cfg["tz"]):
+                tz = ZoneInfo(cfg["tz"])
+                hh, mm = (int(x) for x in cfg["time"].split(":"))
+                now = datetime.now(tz)
+                nxt = next_run(now, hh, mm)
+                wait = min(3600, max(1, (nxt - now).total_seconds()))
+            if _wake.wait(timeout=wait):  # schedule changed: start over with the new one
+                _wake.clear()
+                continue
+            if nxt is None:
+                continue
+            cfg2 = schedule_config()
+            if (cfg2["enabled"], cfg2["time"], cfg2["tz"]) != (cfg["enabled"], cfg["time"], cfg["tz"]):
+                continue
+            if datetime.now(tz) < nxt:
+                continue
+            when = datetime.now(tz).isoformat(timespec="minutes")
+            try:
+                plan, results = run_prune(max_deletes=cfg2["max"])
+                if results is None:
+                    n = sum(len(g["Episodes"]) for g in plan)
+                    msg = f"Skipped: {n} recordings exceeds the safety cap of {cfg2['max']}. Review and use Apply keep limits."
+                else:
+                    ok = sum(1 for r in results if r["ok"])
+                    msg = f"Deleted {ok} of {len(results)} recordings."
+            except Exception as e:
+                msg = f"Failed: {e}"
+            _auto["last"] = {"when": when, "summary": msg}
+            app.logger.warning("Auto-prune %s: %s", when, msg)
         except Exception as e:
-            msg = f"Failed: {e}"
-        _auto["last"] = {"when": when, "summary": msg}
-        app.logger.warning("Auto-prune %s: %s", when, msg)
-
-
-if AUTO_PRUNE_TIME:
-    try:
-        _hh, _mm = (int(x) for x in AUTO_PRUNE_TIME.split(":"))
-        ZoneInfo(TZNAME)
-        threading.Thread(target=auto_loop, args=(_hh, _mm), daemon=True).start()
-    except Exception as e:
-        app.logger.warning("Auto-prune disabled (bad AUTO_PRUNE_TIME or TZ): %s", e)
+            app.logger.warning("Auto-prune scheduler error: %s", e)
+            time.sleep(60)
 
 
 # ---------- routes ----------
@@ -252,10 +288,7 @@ def delete():
 def get_limits():
     return jsonify({
         "limits": load_limits(),
-        "auto": {
-            "enabled": bool(AUTO_PRUNE_TIME), "time": AUTO_PRUNE_TIME, "tz": TZNAME,
-            "next": _auto["next"], "last": _auto["last"], "max": AUTO_PRUNE_MAX,
-        },
+        "auto": {**schedule_config(), "next": next_run_iso(schedule_config()), "last": _auto["last"]},
     })
 
 
@@ -378,6 +411,8 @@ def get_settings():
         "dvr_host": saved or env or "",
         "source": "ui" if saved else "env" if env else "none",
         "env_dvr_host": env,
+        "schedule": schedule_config(),
+        "timezones": sorted(available_timezones()),
     })
 
 
@@ -416,3 +451,31 @@ def update_settings():
     save_settings(settings)
     _storage_cache.clear()
     return jsonify({"ok": True, "dvr_host": ok[0], "device": ok[1]})
+
+
+@app.post("/api/settings/schedule")
+def update_schedule():
+    b = request.get_json(force=True) or {}
+    t = (b.get("time") or "").strip()
+    tz = (b.get("tz") or "").strip()
+    try:
+        mx = int(b.get("max"))
+    except (TypeError, ValueError):
+        mx = 0
+    if not TIME_RE.match(t):
+        return jsonify({"error": "Enter a time like 03:00"}), 400
+    if not valid_tz(tz):
+        return jsonify({"error": "Unknown timezone. Pick one from the list, like America/Chicago"}), 400
+    if mx < 1:
+        return jsonify({"error": "The safety cap must be a whole number, 1 or more"}), 400
+    st = load_settings()
+    st.update({"auto_prune_enabled": bool(b.get("enabled")), "auto_prune_time": t,
+               "timezone": tz, "auto_prune_max": mx})
+    save_settings(st)
+    _wake.set()
+    cfg = schedule_config()
+    return jsonify({"ok": True, "schedule": cfg, "next": next_run_iso(cfg)})
+
+
+# Start the scheduler last, after everything it uses is defined
+threading.Thread(target=auto_loop, daemon=True).start()

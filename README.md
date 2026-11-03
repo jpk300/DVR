@@ -40,11 +40,10 @@ Set these under `environment:` in `docker-compose.yml`.
 | `DVR_HOST` | none | IP or hostname of your DVR. Can also be set from the Settings tab, which takes priority. |
 | `DVR_STORAGE_URL` | none | Point straight at the record engine's `recorded_files.json` instead of using `DVR_HOST`. |
 | `DEVICE_AUTH` | read from the DVR | Override the DeviceAuth used to look up recording rules. Join the strings together if you have several tuners. |
-| `TZ` | `UTC` | Your timezone (for example `America/Chicago`), so the daily run happens when you expect. |
-| `AUTO_PRUNE_TIME` | empty (off) | Run the keep-limit cleanup daily at this local time, `HH:MM` 24-hour. |
-| `AUTO_PRUNE_MAX` | `25` | Safety cap. If an automatic run would delete more than this many recordings, it skips and waits for you to review. |
 | `APP_USER` / `APP_PASS` | none | Optional HTTP basic auth for the whole app. |
 | `DATA_DIR` | `/data` | Where limits and settings are stored inside the container. |
+
+Automatic cleanup (on/off, daily time, timezone and safety cap) is configured on the **Settings** tab, not here. The scheduler picks up changes as soon as you save. `AUTO_PRUNE_TIME`, `AUTO_PRUNE_MAX` and `TZ` still work as first-run defaults if you prefer to set them in the compose file; anything saved in the app takes priority.
 
 If no DVR address is set anywhere, the app falls back to Silicondust's cloud discovery, which only works when you share a public IP with the DVR.
 
