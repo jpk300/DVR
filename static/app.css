@@ -91,24 +91,26 @@ dialog .btns { display: flex; gap: .6rem; justify-content: flex-end; flex-wrap: 
 .gbtn:hover { filter: brightness(1.08); }
 .gbtn:active { filter: brightness(.95); }
 .top nav > .on { color: var(--text); }
-#settings-view { max-width: 700px; padding: .6rem 2rem 3rem; }
-.card { background: var(--panel); border-radius: 16px; padding: 1.4rem; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
-.card h2 { margin: 0 0 .3rem; font-size: 1.3rem; }
-.card .help { color: var(--muted); font-size: .92rem; margin: .2rem 0 1rem; }
-.card label { display: block; font-size: .85rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .4rem; }
-.card input[type=text] { width: 100%; font: inherit; font-size: 1.2rem; padding: .7rem .9rem; border-radius: 10px;
+#settings-view { max-width: 640px; padding: .4rem 2rem 2rem; }
+.card { background: var(--panel); border-radius: 14px; padding: 1rem 1.2rem; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+.card h2 { margin: 0 0 .2rem; font-size: 1.1rem; }
+.card .help { color: var(--muted); font-size: .85rem; margin: .1rem 0 .75rem; }
+.card label { display: block; font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .3rem; }
+.card input[type=text] { width: 100%; font: inherit; font-size: 1rem; padding: .45rem .7rem; border-radius: 8px;
                          border: 2px solid #444; background: #1b1b1b; color: var(--text); outline: 0; }
 .card input[type=text]:focus { border-color: var(--sel); }
-.card .btns { display: flex; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
+.card .btns { display: flex; gap: .5rem; margin-top: .75rem; flex-wrap: wrap; }
+.card .btn { padding: .45rem .85rem; font-size: .9rem; border-radius: 10px; }
 .btn.primary { background: var(--sel); font-weight: 600; }
-#hostMsg { margin-top: 1rem; min-height: 1.4rem; }
+#hostMsg, #autoMsg { font-size: .9rem; }
+#hostMsg:not(:empty), #autoMsg:not(:empty) { margin-top: .6rem; }
 .good { color: var(--ok); } .bad { color: #ff8a8a; }
 /* settings: schedule card */
-.card input[type=time], .card input[type=number] { width: 100%; font: inherit; font-size: 1.1rem; padding: .65rem .8rem; border-radius: 10px;
+.card input[type=time], .card input[type=number] { width: 100%; font: inherit; font-size: 1rem; padding: .4rem .7rem; border-radius: 8px;
                          border: 2px solid #444; background: #1b1b1b; color: var(--text); outline: 0; }
 .card input[type=time]:focus, .card input[type=number]:focus { border-color: var(--sel); }
-.card label.chk { display: flex; gap: .6rem; align-items: center; text-transform: none; letter-spacing: 0; font-size: 1.05rem; color: var(--text); margin-bottom: 0; }
-.fields { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: .8rem; margin-top: 1rem; }
+.card label.chk { display: flex; gap: .6rem; align-items: center; text-transform: none; letter-spacing: 0; font-size: .95rem; color: var(--text); margin-bottom: 0; }
+.fields { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: .7rem; margin-top: .75rem; }
 .mhint, .mclose, #topbtns { display: none; }
 
 /* phones and narrow windows: list first, details in a full-screen sheet */
@@ -131,7 +133,7 @@ dialog .btns { display: flex; gap: .6rem; justify-content: flex-end; flex-wrap: 
   .search { min-width: 0; width: 100%; }
 }
 /* spacing that used to be inline style attributes (blocked by the CSP) */
-#hostSrc { margin-top: .6rem; }
-.card + .card { margin-top: 1rem; }
-.help.cap-note { margin-top: .8rem; }
+#hostSrc { margin: .4rem 0 0; }
+.card + .card { margin-top: .8rem; }
+.help.cap-note { margin-top: .6rem; }
 #tz-browser { margin-left: .4rem; }
