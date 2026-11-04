@@ -76,11 +76,29 @@ If no DVR address is saved, the app falls back to Silicondust's cloud discovery,
 2. The list shows how many recordings each rule would delete, and the show's panel marks them.
 3. Click **Apply all keep rules**, or **Delete N now** in one show's panel, to preview and confirm. Or let the daily run handle it.
 
-**Protected recordings** (the lock button next to each recording) are set aside before a rule is applied. They are never deleted, and they don't count toward N, so "keep the newest 2" keeps the two newest *unprotected* recordings plus every protected one. Protecting an old episode never causes a newer one to be deleted. A protected recording can't be ticked for deletion, and the server refuses to delete it even if asked directly. Remove the protection first to delete it. Protection is stored in `data/protected.json` and identifies each recording by its program and air time, so it survives the DVR changing address.
+Protected recordings are never deleted by a rule, and don't count toward its N (see [Protecting recordings](#protecting-recordings)).
 
 "Watched" comes from the DVR's `Resume` field (playback position), which the DVR sets to `4294967295` once an episode has been watched to the end. Recordings whose watched status the DVR doesn't report are treated as unwatched, so a watched rule never deletes them. Check what your DVR reports with `/api/debug`.
 
 Keep-rule cleanups delete **without** re-record, so the DVR remembers those episodes as already recorded and won't record them again. Rules are tied to each show, not to the DVR address, so they carry over if you point the app at a different DVR. Older `limits.json` files that store a plain number still work and mean "keep the newest N".
+
+## Protecting recordings
+
+Lock a recording to make sure it's never deleted, for example a finale you want to keep, or an episode someone hasn't watched yet.
+
+1. Click a show to open its recordings.
+2. Click the **lock** button at the right of a recording. It turns blue and the recording gets a **Protected** tag.
+3. To remove the protection, click the lock again.
+
+What protection does:
+
+- **Nothing deletes it.** Deleting by hand, **Apply all keep rules**, **Delete N now** and the automatic daily cleanup all skip protected recordings. Its checkbox is greyed out, and **Select all** leaves it out. The server also refuses to delete a protected recording if asked directly, so the page isn't the only safeguard.
+- **It doesn't count toward a keep rule.** Protected recordings are set aside before a rule is applied. With "Keep the newest 2", the two newest *unprotected* recordings are kept, plus every protected one. Protecting an old episode never causes a newer one to be deleted in its place.
+- **It's visible.** Each show's panel says how many of its recordings are protected (for example "5 recordings · 1 protected"), and the keep-rule dialog reminds you they're excluded.
+
+To delete a protected recording, remove its protection first.
+
+Protection is saved in `data/protected.json`, so it survives restarts and rebuilds. Each recording is identified by its program and air time rather than the DVR's address, so protection also survives the DVR getting a new IP address. If a protected recording is deleted outside this app (for example in the HDHomeRun app), its entry stays in the file; it's harmless and protects nothing.
 
 ## Run without Docker
 
