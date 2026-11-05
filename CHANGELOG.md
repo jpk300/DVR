@@ -7,6 +7,11 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 ## [Unreleased]
 
 ### Added
+- **Fire TV app** (firetv branch): an Android TV app that shows the server's page full-screen, with remote
+  support. Back goes to the page first, and Menu changes the server. It is built by GitHub Actions and
+  published as the `firetv-latest` pre-release for sideloading with Downloader. See `firetv/README.md`.
+- **TV mode** for the page (`?tv=1`, used by the app): the arrow keys move focus to the nearest control,
+  OK ticks checkboxes, focus survives redraws, and the type is larger with a bold focus ring.
 - **Protect recordings**: a lock button on each recording. Protected recordings can't be deleted by hand,
   by keep rules or by the automatic cleanup (the server refuses, not just the page). They don't count
   toward a rule's N. Stored in `data/protected.json` by program and air time; `POST /api/protect`.

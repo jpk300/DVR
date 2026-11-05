@@ -100,6 +100,10 @@ To delete a protected recording, remove its protection first.
 
 Protection is saved in `data/protected.json`, so it survives restarts and rebuilds. Each recording is identified by its program and air time rather than the DVR's address, so protection also survives the DVR getting a new IP address. If a protected recording is deleted outside this app (for example in the HDHomeRun app), its entry stays in the file; it's harmless and protects nothing.
 
+## Fire TV app
+
+This branch (`firetv`) adds a Fire TV app that shows this page full-screen and works with the Fire TV remote, plus a TV mode for the page (arrow-key navigation, larger type, a bold focus ring). See [firetv/README.md](firetv/README.md) to install it. The server must run this branch for TV mode to be available.
+
 ## Run without Docker
 
 ```bash
@@ -151,6 +155,7 @@ dvr/                 Backend package
   pruning.py           keep rules and pruning
   scheduler.py         Scheduler: the daily automatic cleanup
   routes.py            the HTTP API (a Flask blueprint), security headers
+firetv/              Fire TV app (Android project) and its install guide
 static/              Web UI: index.html, app.css
   js/                  ES modules (main.js is the entry point), type-checked with // @ts-check
 requirements.txt     Python dependencies
