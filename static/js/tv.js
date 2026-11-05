@@ -48,10 +48,50 @@ function candidates() {
  * @param {HTMLElement} from @param {Dir} dir @param {HTMLElement[]} all
  */
 function nearest(from, dir, all) {
+  const vertical = dir === "up" || dir === "down";
+  // Up and Down stay in the same area (the episode list, then the recordings panel, the show
+  // list, ...) while it has anything further that way; only then do they move on.
+  if (vertical) {
+    let outer = null;
+    for (let area = from.closest(AREAS); area; area = area.parentElement?.closest(AREAS) || null) {
+      const box = outer = area;
+      const mine = nearestIn(from, dir, all.filter(el => box.contains(el)), vertical);
+      if (mine) return mine;
+    }
+    // leaving an area, go to what's above or below it (like the top bar), never to what's beside it
+    if (outer) {
+      const o = outer.getBoundingClientRect();
+      all = all.filter(el => { const r = el.getBoundingClientRect(); return overlaps(o.left, o.right, r.left, r.right); });
+    }
+  }
+  // Left and Right: within an area only along the same line; diagonally only into an area
+  // beside this one (the show list next to the panel), never one above or below it
+  if (!vertical) {
+    let outer = from.closest(AREAS);
+    while (outer?.parentElement?.closest(AREAS)) outer = outer.parentElement.closest(AREAS);
+    if (outer) {
+      const o = outer.getBoundingClientRect(), box = outer;
+      all = all.filter(el => {
+        const r = el.getBoundingClientRect();
+        return box.contains(el) || overlaps(o.top, o.bottom, r.top, r.bottom);
+      });
+    }
+    return nearestIn(from, dir, all, vertical, outer);
+  }
+  return nearestIn(from, dir, all, vertical);
+}
+
+/** Areas of the page that Up and Down keep to, smallest first. */
+const AREAS = ".eps, dialog, header.top, #side, #main-view section, #history-view, #settings-view";
+
+/**
+ * @param {HTMLElement} from @param {Dir} dir @param {HTMLElement[]} all @param {boolean} vertical
+ * @param {Element | null} [ownArea] for Left and Right: the area where only same-line moves count
+ */
+function nearestIn(from, dir, all, vertical, ownArea = null) {
   const a = from.getBoundingClientRect();
   const ax = a.left + a.width / 2, ay = a.top + a.height / 2;
   let best = null, bestScore = Infinity;
-  const vertical = dir === "up" || dir === "down";
   for (const el of all) {
     if (el === from || el.contains(from) || from.contains(el)) continue;
     const b = el.getBoundingClientRect();
@@ -65,8 +105,10 @@ function nearest(from, dir, all) {
     const ahead = vertical ? Math.max(0, dir === "down" ? b.top - a.bottom : a.top - b.bottom)
                            : Math.max(0, dir === "right" ? b.left - a.right : a.left - b.right);
     const sameLine = vertical ? overlaps(a.left, a.right, b.left, b.right) : overlaps(a.top, a.bottom, b.top, b.bottom);
+    if (!sameLine && ownArea && ownArea.contains(el)) continue;
     const side = sameLine ? 0 : vertical ? Math.abs(bx - ax) : Math.abs(by - ay);
-    const score = ahead + side * 3;
+    // Left and Right go to something on the same line if there is one, however far
+    const score = ahead + side * 3 + (!vertical && !sameLine ? 1e6 : 0);
     if (score < bestScore) { bestScore = score; best = el; }
   }
   return best;
@@ -96,9 +138,14 @@ function focusEl(el) {
   const prev = document.activeElement;
   el.focus({preventScroll: true});
   markFocus(el);   // also set here: focus events can be late or missing while the window isn't focused
-  // a box we just left (like the recordings panel) goes back to its top, so it isn't left half-scrolled
+  // leaving the recordings panel puts it (and the episode list inside it) back at the top, so it
+  // isn't left half-scrolled; moving within the panel leaves its scrolling alone
   if (prev && prev !== document.body) {
-    for (const box of scrollers(prev).slice(0, -1)) if (!box.contains(el)) box.scrollTop = 0;
+    const boxes = scrollers(prev).slice(0, -1);
+    const outer = boxes[boxes.length - 1];
+    if (outer && !outer.contains(el)) {
+      for (const box of [outer, ...outer.querySelectorAll("*")]) if (box.scrollTop) box.scrollTop = 0;
+    }
   }
   el.scrollIntoView({block: "nearest", inline: "nearest"});
   // "nearest" stops as soon as el shows, which can leave a picture or heading above it cut off:
