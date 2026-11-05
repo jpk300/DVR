@@ -55,7 +55,7 @@ adb install -r dvr-manager-firetv.apk
 Everything on the page works from the remote. Typing (search, the server address) opens the Fire TV keyboard.
 
 **Moving around:**
-- The top bar (**Manage**, **History**, **Settings**) stays at the top of the screen while you scroll.
+- The top bar (**Manage**, **History**, **Settings**) stays at the top of the screen while you scroll. The automatic-cleanup status (on or off, next run, last run) is in a bar along the bottom.
 - ▲ and ▼ stay inside the area you're in: a show's recordings panel on the left, the show list on the right, or the top bar. They only move on when nothing is left in that direction, and then only to what's directly above or below, such as the top bar.
 - ◀ and ▶ move along the same line: between a recording's checkbox and its lock, or across from the panel to the show list.
 - The recordings panel scrolls on its own to reach older recordings. Moving back up to its top, or across to the show list, scrolls it back to the top, so the show's picture is in view again.

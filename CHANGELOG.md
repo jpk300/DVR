@@ -12,7 +12,8 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
   published as the `firetv-latest` pre-release for sideloading with Downloader. See `firetv/README.md`.
 - **TV mode** for the page (`?tv=1`, used by the app): the arrow keys move focus to the nearest control,
   OK ticks checkboxes, focus survives redraws, and the type is larger with a bold focus ring.
-  - The top bar stays at the top of the screen while the page scrolls.
+  - The top bar stays at the top of the screen while the page scrolls, and the automatic-cleanup
+    status sits in a bar along the bottom.
   - ▲ / ▼ stay within an area (the recordings panel, the show list, the top bar) until it has nothing
     further that way. ◀ / ▶ move along the same line.
   - The recordings panel scrolls back to the top, picture included, when you reach its top or leave it.
