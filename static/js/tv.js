@@ -81,11 +81,34 @@ function markFocus(el) {
   el.classList.add("tv-focus");
 }
 
+/** The scrolling boxes around el, innermost first, ending with the page itself. @param {Element} el */
+function scrollers(el) {
+  const out = [];
+  for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY) && p.scrollHeight > p.clientHeight) out.push(p);
+  }
+  out.push(/** @type {HTMLElement} */ (document.scrollingElement || document.documentElement));
+  return out;
+}
+
 /** @param {HTMLElement} el */
 function focusEl(el) {
+  const prev = document.activeElement;
   el.focus({preventScroll: true});
   markFocus(el);   // also set here: focus events can be late or missing while the window isn't focused
+  // a box we just left (like the recordings panel) goes back to its top, so it isn't left half-scrolled
+  if (prev && prev !== document.body) {
+    for (const box of scrollers(prev).slice(0, -1)) if (!box.contains(el)) box.scrollTop = 0;
+  }
   el.scrollIntoView({block: "nearest", inline: "nearest"});
+  // "nearest" stops as soon as el shows, which can leave a picture or heading above it cut off:
+  // on the first or last control in a box, scroll the box all the way
+  const all = candidates();
+  for (const box of scrollers(el)) {
+    const inside = all.filter(c => box.contains(c));
+    if (inside[0] === el) box.scrollTop = 0;
+    else if (inside[inside.length - 1] === el) box.scrollTop = box.scrollHeight;
+  }
 }
 
 /** Should an arrow key stay inside this field (moving the text cursor) instead of moving focus? */
