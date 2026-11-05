@@ -11,7 +11,8 @@ from types import SimpleNamespace
 
 from dvr import create_app
 from dvr.config import Config
-from dvr.pruning import run_prune
+from dvr.pruning import adopt_new_shows, run_prune
+from dvr.scheduler import Scheduler, low_space_note
 from dvr.storage import Storage, StorageError
 
 
@@ -103,6 +104,69 @@ class PruneTests(TempDirTest):
         self.assertEqual(svc.client.deleted, [])
 
 
+def shows(*ids):
+    return [{"SeriesID": i, "Title": f"Show {i}", "Episodes": []} for i in ids]
+
+
+class NewShowRuleTests(TempDirTest):
+    def setUp(self):
+        super().setUp()
+        self.st = Storage(self.tmp)
+        self.st.update_settings({"new_show_keep": 5})
+
+    def test_first_list_only_remembers_shows(self):
+        self.assertEqual(adopt_new_shows(self.st, shows("A", "B")), [])
+        self.assertEqual(self.st.limits(), {})
+        self.assertEqual(self.st.known_shows(), ["A", "B"])
+
+    def test_new_show_gets_the_rule(self):
+        adopt_new_shows(self.st, shows("A"))
+        self.assertEqual(adopt_new_shows(self.st, shows("A", "B")), ["B"])
+        self.assertEqual(self.st.limits(), {"B": {"keep": 5, "delete_watched": False}})
+        # seen now, so it isn't given the rule again after the user changes it
+        self.st.save_limits({})
+        self.assertEqual(adopt_new_shows(self.st, shows("A", "B")), [])
+        self.assertEqual(self.st.limits(), {})
+
+    def test_existing_rule_is_kept(self):
+        adopt_new_shows(self.st, shows("A"))
+        self.st.save_limits({"B": {"keep": None, "delete_watched": True}})
+        adopt_new_shows(self.st, shows("A", "B"))
+        self.assertEqual(self.st.limits()["B"], {"keep": None, "delete_watched": True})
+
+    def test_rule_off_only_remembers(self):
+        self.st.update_settings(remove=("new_show_keep",))
+        adopt_new_shows(self.st, shows("A"))
+        self.assertEqual(adopt_new_shows(self.st, shows("A", "B")), [])
+        self.assertEqual(self.st.known_shows(), ["A", "B"])
+
+    def test_cleanup_covers_a_show_first_seen_tonight(self):
+        st = self.st
+        st.save_known_shows(["OLD"])
+        svc = SimpleNamespace(storage=st, client=FakeClient(), history=SimpleNamespace(record=lambda *a, **k: None))
+        st.update_settings({"new_show_keep": 1})
+        run_prune(svc, source="auto")
+        self.assertEqual(st.limits()["S1"], {"keep": 1, "delete_watched": False})
+        self.assertEqual(len(svc.client.deleted), 2)   # three recordings, keep the newest one
+
+
+class SpaceWarningTests(TempDirTest):
+    def test_note(self):
+        self.assertEqual(low_space_note(60e9, 50e9), "")
+        self.assertIn("40.0 GB left", low_space_note(40e9, 50e9))
+        self.assertEqual(low_space_note(None, 50e9), "")
+
+    def test_cleanup_summary_mentions_low_space(self):
+        st = Storage(self.tmp)
+        st.update_settings({"low_space_gb": 50})
+        client = FakeClient()
+        client.engine_info = lambda: {"FreeSpace": 12e9}
+        svc = SimpleNamespace(storage=st, client=client, history=SimpleNamespace(record=lambda *a, **k: None))
+        msg = Scheduler(svc, enabled=False).run_once(25, "2026-11-05T03:00")
+        self.assertIn("Free space is low: 12.0 GB left", msg)
+        self.assertIn("Free space is low", st.last_run()["summary"])
+
+
 class LoginTests(TempDirTest):
     def test_no_login_configured(self):
         self.assertEqual(make_app(self.tmp).test_client().get("/api/settings").status_code, 200)
@@ -145,6 +209,24 @@ class RequestCheckTests(TempDirTest):
         r = self.c.post("/api/protect", json={"key": "P1@1", "protected": False})
         self.assertEqual(r.status_code, 500)
         self.assertIn("damaged", r.get_json()["error"])
+
+    def test_new_show_setting(self):
+        self.assertIsNone(self.c.get("/api/settings").get_json()["new_show_keep"])
+        r = self.c.post("/api/settings/new-shows", json={"keep": 5})
+        self.assertEqual(r.get_json()["new_show_keep"], 5)
+        self.assertEqual(self.c.get("/api/settings").get_json()["new_show_keep"], 5)
+        for bad in (0, -1, 2.5, "5", True):
+            self.assertEqual(self.c.post("/api/settings/new-shows", json={"keep": bad}).status_code, 400, bad)
+        self.assertIsNone(self.c.post("/api/settings/new-shows", json={"keep": None}).get_json()["new_show_keep"])
+
+    def test_space_setting_and_status(self):
+        self.assertEqual(self.c.post("/api/settings/space", json={"warn_gb": 50}).status_code, 200)
+        self.assertEqual(self.c.get("/api/settings").get_json()["low_space_gb"], 50)
+        self.c.application.extensions["dvr"].client.engine_info = lambda: {"FreeSpace": 1, "TotalSpace": 2}
+        self.assertEqual(self.c.get("/api/status").get_json()["warn_below"], 50 * 10**9)
+        self.assertEqual(self.c.post("/api/settings/space", json={"warn_gb": "lots"}).status_code, 400)
+        self.c.post("/api/settings/space", json={"warn_gb": None})
+        self.assertIsNone(self.c.get("/api/status").get_json()["warn_below"])
 
     def test_damaged_file_is_reported_as_json(self):
         self.write("protected.json", "{")

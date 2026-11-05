@@ -1,5 +1,5 @@
 // @ts-check
-// The Settings tab: DVR address and the automatic-cleanup schedule.
+// The Settings tab: DVR address, the automatic-cleanup schedule, the new-show rule and the free-space warning.
 import {load} from "./actions.js";
 import {api, busy} from "./api.js";
 import {$, $button, $input} from "./dom.js";
@@ -47,7 +47,47 @@ export async function loadSettings() {
     $("tz-note").hidden = true;
   }
   setMsg("autoMsg");
+  $input("new-on").checked = j.new_show_keep != null;
+  $input("new-keep").value = String(j.new_show_keep ?? DEFAULT_NEW_KEEP);
+  setMsg("newMsg");
+  $input("space-on").checked = j.low_space_gb != null;
+  $input("space-gb").value = String(j.low_space_gb ?? DEFAULT_WARN_GB);
+  $("space-now").textContent = state.freeBytes != null ? `The DVR has ${fmtSize(state.freeBytes)} free now.` : "";
+  setMsg("spaceMsg");
   loadTimezones();
+}
+
+const DEFAULT_NEW_KEEP = 5;    // suggested when the new-show rule is first turned on
+const DEFAULT_WARN_GB = 50;
+
+/** A whole number of 1 or more from a field, or null. @param {string} id */
+function wholeNumber(id) {
+  const n = Number($input(id).value);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
+/** @param {HTMLButtonElement} btn */
+export async function saveNewShows(btn) {
+  setMsg("newMsg");
+  const on = $input("new-on").checked, n = wholeNumber("new-keep");
+  if (on && n == null) { setMsg("newMsg", "✗ Enter how many recordings new shows keep (1 or more).", "bad"); return; }
+  try {
+    await busy(btn, () => api("api/settings/new-shows", {json: {keep: on ? n : null}}));
+  } catch (e) { setMsg("newMsg", "✗ " + /** @type {Error} */ (e).message, "bad"); return; }
+  setMsg("newMsg", on ? `✓ Saved. New shows will keep the newest ${n}.` : "✓ Saved. New shows keep everything.", "good");
+}
+
+/** @param {HTMLButtonElement} btn */
+export async function saveSpaceWarning(btn) {
+  setMsg("spaceMsg");
+  const on = $input("space-on").checked, gb = wholeNumber("space-gb");
+  if (on && gb == null) { setMsg("spaceMsg", "✗ Enter the free space to warn below, in GB (1 or more).", "bad"); return; }
+  try {
+    await busy(btn, () => api("api/settings/space", {json: {warn_gb: on ? gb : null}}));
+  } catch (e) { setMsg("spaceMsg", "✗ " + /** @type {Error} */ (e).message, "bad"); return; }
+  state.warnBelow = on && gb ? gb * 1e9 : null;
+  render("info");
+  setMsg("spaceMsg", on ? `✓ Saved. You'll be warned below ${gb} GB free.` : "✓ Saved. No free space warning.", "good");
 }
 
 /** @param {"test" | "save" | "reset"} mode @param {HTMLButtonElement} btn */

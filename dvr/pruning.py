@@ -10,11 +10,47 @@ Protected recordings are set aside before a rule is applied: they are never dele
 count toward N, so "keep the newest 2" keeps the 2 newest unprotected recordings plus every
 protected one.
 """
+import logging
+
 from .dvr_client import episode_index
+
+log = logging.getLogger(__name__)
 
 
 def series_key(s):
     return s.get("SeriesID") or s.get("Title")
+
+
+def new_show_keep(settings):
+    """The "keep the newest N" rule new shows get (Settings > New shows), or None if it's off."""
+    n = settings.get("new_show_keep")
+    return n if isinstance(n, int) and not isinstance(n, bool) and n >= 1 else None
+
+
+def adopt_new_shows(storage, shows):
+    """Give shows the app hasn't seen before the new-show rule, and remember every show seen.
+    Call with storage.data_lock held. The first time (no known_shows.json yet) every show is only
+    remembered, so turning the rule on never changes shows you already had. A show that already
+    has a rule keeps it. Returns the ids that were given the rule."""
+    ids = {series_key(s) for s in shows if series_key(s)}
+    known = storage.known_shows()
+    if known is not None and ids <= set(known):
+        return []
+    adopted = []
+    keep = new_show_keep(storage.settings())
+    if known is not None and keep:
+        limits = storage.limits()
+        for sid in sorted(ids - set(known)):
+            if sid not in limits:
+                limits[sid] = {"keep": keep, "delete_watched": False}
+                adopted.append(sid)
+        if adopted:
+            storage.save_limits(limits)
+            titles = {series_key(s): s.get("Title") for s in shows}
+            log.info("New shows given the rule \"keep the newest %d\": %s", keep,
+                     ", ".join(repr(titles.get(sid) or sid) for sid in adopted))
+    storage.save_known_shows(set(known or []) | ids)
+    return adopted
 
 
 def normalize_rule(value):
@@ -101,6 +137,8 @@ def run_prune(svc, max_deletes=None, confirmed=None, series_id=None, source="kee
     exactly, otherwise PlanChanged is raised and nothing is deleted."""
     with svc.storage.data_lock:
         series = svc.client.load_shows(series_id)
+        if series_id is None:
+            adopt_new_shows(svc.storage, series)   # so a show recorded today is covered tonight
         protected = set(svc.storage.protected())
         plan = build_plan(series, svc.storage.limits(), only=series_id, protected=protected)
         urls = [e["CmdURL"] for g in plan for e in g["Episodes"] if e.get("CmdURL")]

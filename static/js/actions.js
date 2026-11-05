@@ -14,7 +14,7 @@ const statusLine = (/** @type {string} */ t) => { document.getElementById("statu
 export async function loadStatus() {
   try {
     const sj = await api("api/status");
-    state.freeBytes = sj.free; state.totalBytes = sj.total;
+    state.freeBytes = sj.free; state.totalBytes = sj.total; state.warnBelow = sj.warn_below ?? null;
   } catch {
     state.freeBytes = state.totalBytes = null;
   }
@@ -27,7 +27,9 @@ export async function load(fresh = true) {
   try {
     let shows, lim;
     try {
-      [shows, lim] = await Promise.all([api(fresh ? "api/recordings?fresh=1" : "api/recordings"), api("api/limits")]);
+      // one after the other: loading the list can give new shows the new-show rule
+      shows = await api(fresh ? "api/recordings?fresh=1" : "api/recordings");
+      lim = await api("api/limits");
     } catch (e) {
       statusLine("Couldn't load your recordings: " + /** @type {Error} */ (e).message);
       return false;

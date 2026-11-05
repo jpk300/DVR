@@ -9,8 +9,8 @@ from flask import Blueprint, Response, current_app, jsonify, request
 
 from .config import HISTORY_MAX, MAX_DELETE_BATCH
 from .dvr_client import episode_index, friendly
-from .pruning import PlanChanged, build_plan, normalize_rule, normalized_limits, run_prune
-from .scheduler import next_run_iso, schedule_config
+from .pruning import PlanChanged, adopt_new_shows, build_plan, new_show_keep, normalize_rule, normalized_limits, run_prune
+from .scheduler import low_space_bytes, next_run_iso, schedule_config
 from .storage import TIME_RE, StorageError, clean_host, valid_tz
 
 bp = Blueprint("dvr", __name__)
@@ -105,10 +105,14 @@ def index():
 
 @bp.get("/api/recordings")
 def recordings():
+    s = svc()
     try:
-        return jsonify(with_protection(svc().client.fetch_all(fresh=request.args.get("fresh") == "1")))
+        shows = s.client.fetch_all(fresh=request.args.get("fresh") == "1")
     except Exception as e:
         return error(friendly(e), 502)
+    with s.storage.data_lock:
+        adopt_new_shows(s.storage, shows)   # new shows get the new-show rule (Settings)
+    return jsonify(with_protection(shows))
 
 
 @bp.get("/api/show")
@@ -155,7 +159,8 @@ def delete():
 def status():
     try:
         info = svc().client.engine_info()
-        return jsonify({"free": info.get("FreeSpace"), "total": info.get("TotalSpace")})
+        return jsonify({"free": info.get("FreeSpace"), "total": info.get("TotalSpace"),
+                        "warn_below": low_space_bytes(svc().storage.settings())})
     except Exception as e:
         return error(friendly(e), 502)
 
@@ -309,6 +314,8 @@ def get_settings():
         "dvr_host": st.get("dvr_host") or "",
         "schedule": schedule_config(st),
         "tz_saved": bool(st.get("timezone")),
+        "new_show_keep": new_show_keep(st),
+        "low_space_gb": st.get("low_space_gb"),
     })
 
 
@@ -385,3 +392,42 @@ def update_schedule():
     s.scheduler.wake()
     cfg = schedule_config(st)
     return jsonify({"ok": True, "schedule": cfg, "next": next_run_iso(cfg)})
+
+
+def whole_number(v):
+    """v as an int of 1 or more, or None if it isn't one (true/false don't count)."""
+    if isinstance(v, bool):
+        return None
+    try:
+        n = int(v)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 1 and n == v else None
+
+
+@bp.post("/api/settings/new-shows")
+def update_new_shows():
+    """The rule new shows get: {keep: N} to keep the newest N, or {keep: null} to turn it off."""
+    b = json_body() or {}
+    keep = b.get("keep")
+    if keep is not None:
+        keep = whole_number(keep)
+        if keep is None:
+            return error("Enter how many recordings new shows keep (1 or more)", 400)
+    s = svc()
+    st = s.storage.update_settings({"new_show_keep": keep} if keep else None, remove=() if keep else ("new_show_keep",))
+    return jsonify({"ok": True, "new_show_keep": new_show_keep(st)})
+
+
+@bp.post("/api/settings/space")
+def update_space_warning():
+    """Warn when the DVR's free space is below this: {warn_gb: N}, or {warn_gb: null} to turn it off."""
+    b = json_body() or {}
+    gb = b.get("warn_gb")
+    if gb is not None:
+        gb = whole_number(gb)
+        if gb is None:
+            return error("Enter the free space to warn below, in GB (1 or more)", 400)
+    s = svc()
+    st = s.storage.update_settings({"low_space_gb": gb} if gb else None, remove=() if gb else ("low_space_gb",))
+    return jsonify({"ok": True, "low_space_gb": st.get("low_space_gb")})

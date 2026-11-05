@@ -15,6 +15,8 @@ A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.c
 - **Apply all keep rules**, or apply one show's rule from its panel, always with a preview and confirmation first
 - **Deletion history**: every deletion, with when, which episode, how it was triggered and whether it will re-record
 - **Automatic daily cleanup** at a time you choose, with a safety cap
+- **A rule for new shows**: shows that appear for the first time can get a keep rule (for example "keep the newest 5") automatically
+- **Free space warning** on the Manage tab and in the cleanup summary when the DVR's drive gets low
 - **Settings tab** to change the DVR address from the browser, with a connection test
 - Dark UI inspired by the HDHomeRun app's own Tasks screen
 - Loads each show's recordings in parallel (bounded), with short-lived caching, timeouts, and per-show error handling so one failing show doesn't break the list
@@ -38,7 +40,7 @@ Your keep rules, protected recordings, settings, deletion history and the result
 
 ## Configuration
 
-The DVR address and the automatic-cleanup schedule live in `data/settings.json` and are changed on the **Settings** tab. That file is the only place the app reads them from.
+The DVR address, the automatic-cleanup schedule, the new-show rule and the free space warning live in `data/settings.json` and are changed on the **Settings** tab. That file is the only place the app reads them from.
 
 The variables below are set under `environment:` in `docker-compose.yml`.
 
@@ -77,6 +79,10 @@ If no DVR address is saved, the app falls back to Silicondust's cloud discovery,
 3. Click **Apply all keep rules**, or **Delete N now** in one show's panel, to preview and confirm. Or let the daily run handle it.
 
 Protected recordings are never deleted by a rule, and don't count toward its N (see [Protecting recordings](#protecting-recordings)).
+
+**New shows** can get a rule automatically: in **Settings → New shows**, turn on **Give new shows a keep rule** and choose N. From then on, any show the app sees for the first time (a new series, a movie, a sports event, or a show you just scheduled) gets "Keep the newest N", and its button shows **Keep: N**. Change it like any other rule; setting it to **Keep everything** sticks. Shows you already had when you turned it on aren't changed. The daily cleanup checks for new shows before it runs, so a show first recorded today is covered tonight. The app remembers which shows it has seen in `data/known_shows.json`.
+
+**Free space warning:** in **Settings → Free space warning**, choose a level in GB. When the DVR has less free space than that, the Manage tab shows a warning under the counts, and the automatic cleanup's summary (and the log) says so.
 
 "Watched" comes from the DVR's `Resume` field (playback position), which the DVR sets to `4294967295` once an episode has been watched to the end. Recordings whose watched status the DVR doesn't report are treated as unwatched, so a watched rule never deletes them. Check what your DVR reports with `/api/debug`.
 
@@ -165,7 +171,7 @@ pyproject.toml       ruff settings
 Dockerfile           Container image
 gunicorn.conf.py     gunicorn settings (one worker) and the scheduler start-up hook
 docker-compose.yml   Example deployment
-data/                Created at runtime: limits.json, settings.json, protected.json, last_run.json, history.jsonl (not committed)
+data/                Created at runtime: limits.json, settings.json, protected.json, known_shows.json, last_run.json, history.jsonl (not committed)
 ```
 
 ## Contributing

@@ -11,6 +11,7 @@ export const state = {
   /** @type {Record<string, Rule>} */ limits: {},
   /** @type {number | null} */ freeBytes: null,
   /** @type {number | null} */ totalBytes: null,
+  /** @type {number | null} */ warnBelow: null,   // free space (bytes) to warn below, from Settings
   /** @type {AutoInfo | null} */ auto: null,
   /** key of the show in the panel @type {string | null} */ current: null,
   /** @type {"title" | "date" | "count" | "hours"} */ sortMode: "title",
