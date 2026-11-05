@@ -85,6 +85,10 @@ function renderInfo() {
   if (state.totalBytes != null && state.freeBytes != null)
     parts.push(`${fmtSize(state.totalBytes - state.freeBytes)} used`, `${fmtSize(state.freeBytes)} free`);
   box.append(el("div", null, parts.join(" · ")));
+  if (state.freeBytes != null && state.warnBelow && state.freeBytes < state.warnBelow) {
+    box.append(el("div", "low", `⚠ Free space is low: ${fmtSize(state.freeBytes)} left (warning below ` +
+      `${fmtSize(state.warnBelow)}). Delete recordings or tighten keep rules to make room.`));
+  }
   const a = state.auto, line = el("div", "auto");
   if (a && a.enabled) {
     line.append(el("span", "ok", "✓ Automatic cleanup on"));

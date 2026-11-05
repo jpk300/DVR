@@ -53,6 +53,7 @@ class Storage:
         self.last_run_path = os.path.join(data_dir, "last_run.json")
         self.history_path = os.path.join(data_dir, "history.jsonl")
         self.protected_path = os.path.join(data_dir, "protected.json")
+        self.known_shows_path = os.path.join(data_dir, "known_shows.json")
         # Held while changing keep rules and while pruning, so the two never interleave.
         self.data_lock = threading.Lock()
         # Held for read-modify-write of settings.json, so two saves can't overwrite each other.
@@ -199,6 +200,14 @@ class Storage:
                 p[key] = details
             self.write_json(self.protected_path, p)
             return p
+
+    # ---------- shows seen before (for the new-show rule) ----------
+    def known_shows(self):
+        """Every show id the app has seen, or None before the first list is loaded."""
+        return self.read_json(self.known_shows_path, expect=list)
+
+    def save_known_shows(self, ids):
+        self.write_json(self.known_shows_path, sorted(ids))
 
     # ---------- last automatic run ----------
     def last_run(self):

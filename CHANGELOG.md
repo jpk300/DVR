@@ -7,6 +7,12 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 ## [Unreleased]
 
 ### Added
+- **A rule for new shows** (Settings → New shows): a show the app sees for the first time gets "keep the
+  newest N" automatically. Existing shows aren't changed, and the daily cleanup checks for new shows
+  before it runs. Seen shows are remembered in `data/known_shows.json`. `POST /api/settings/new-shows`.
+- **Free space warning** (Settings → Free space warning): below the level you choose, the Manage tab
+  shows a warning and the automatic cleanup's summary mentions it. `POST /api/settings/space`; the level
+  is also in `GET /api/status` as `warn_below`.
 - Tests (`tests/`, standard-library `unittest`) for the data files, login and request checks, run in CI.
 - **Protect recordings**: a lock button on each recording. Protected recordings can't be deleted by hand,
   by keep rules or by the automatic cleanup (the server refuses, not just the page). They don't count
