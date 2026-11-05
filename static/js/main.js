@@ -7,7 +7,7 @@ import {renderHistory} from "./history.js";
 import "./list.js";    // registers the list and info renderers
 import "./panel.js";   // registers the panel renderer
 import {initRuleDialog} from "./ruledialog.js";
-import {browserTz, saveNewShows, saveSchedule, saveSpaceWarning, submitHost} from "./settings.js";
+import {browserTz, initSettings, saveNewShows, saveSchedule, saveSpaceWarning, submitHost} from "./settings.js";
 import {render, state} from "./state.js";
 import {focusFirstShow, initTv} from "./tv.js";
 import {showView} from "./views.js";
@@ -49,4 +49,5 @@ document.addEventListener("keydown", e => {
 });
 
 initRuleDialog();
+initSettings();
 load(false).then(() => { if (tv) focusFirstShow(); });

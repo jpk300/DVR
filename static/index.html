@@ -65,11 +65,18 @@
 </main>
 
 <main id="settings-view" hidden>
-  <div class="card">
+  <!-- TV mode: every section at a glance, and a quick way to reach the ones further down -->
+  <nav class="jump" aria-label="Settings sections">
+    <button type="button" data-to="set-dvr">DVR connection</button>
+    <button type="button" data-to="set-auto">Automatic cleanup</button>
+    <button type="button" data-to="set-new">New shows</button>
+    <button type="button" data-to="set-space">Free space warning</button>
+  </nav>
+  <div class="card" id="set-dvr">
     <h2>DVR connection</h2>
     <p class="help">The IP address or hostname of your HDHomeRun DVR. Changes apply immediately, with no restart.</p>
     <label for="host">DVR IP address or hostname</label>
-    <input type="text" id="host" placeholder="192.168.1.50" autocomplete="off" spellcheck="false">
+    <form class="solo"><input type="text" id="host" placeholder="192.168.1.50" autocomplete="off" spellcheck="false" enterkeyhint="done"></form>
     <p class="help" id="hostSrc"></p>
     <div class="btns">
       <button type="button" class="btn" id="host-test">Test connection</button>
@@ -79,16 +86,16 @@
     <div id="hostMsg"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="set-auto">
     <h2>Automatic cleanup</h2>
     <p class="help">Once a day, delete the recordings that each show's keep rule removes. Changes apply as soon as you save.</p>
     <label class="chk"><input type="checkbox" id="auto-on"> Run cleanup automatically every day</label>
     <div class="fields">
       <div><label for="auto-time">Time</label><input type="time" id="auto-time"></div>
       <div><label for="auto-tz">Timezone</label>
-        <input type="text" id="auto-tz" list="tzlist" placeholder="America/Chicago" autocomplete="off" spellcheck="false">
+        <form class="solo"><input type="text" id="auto-tz" list="tzlist" placeholder="America/Chicago" autocomplete="off" spellcheck="false" enterkeyhint="done"></form>
         <datalist id="tzlist"></datalist></div>
-      <div><label for="auto-max">Safety cap</label><input type="number" id="auto-max" min="1"></div>
+      <div><label for="auto-max">Safety cap</label><span class="num"><button type="button" class="btn step" data-for="auto-max" data-step="-5" aria-label="Lower the cap by 5">−</button><input type="number" id="auto-max" min="1"><button type="button" class="btn step" data-for="auto-max" data-step="5" aria-label="Raise the cap by 5">+</button></span></div>
     </div>
     <p class="help" id="tz-note" hidden></p>
     <p class="help cap-note">If a run would delete more than the safety cap, it skips and waits for you to review and press Apply all keep rules.
@@ -97,23 +104,23 @@
     <div id="autoMsg"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="set-new">
     <h2>New shows</h2>
     <p class="help">When a show appears for the first time (a new series, a movie, or a show you just scheduled), give it a keep rule automatically. You can change it on the show like any other rule. Shows you already have aren't changed.</p>
     <label class="chk"><input type="checkbox" id="new-on"> Give new shows a keep rule</label>
     <div class="fields">
-      <div><label for="new-keep">Keep the newest</label><input type="number" id="new-keep" min="1" aria-label="Number of recordings new shows keep"></div>
+      <div><label for="new-keep">Keep the newest</label><span class="num"><button type="button" class="btn step" data-check="new-on" data-for="new-keep" data-step="-1" aria-label="Keep one fewer">−</button><input type="number" id="new-keep" min="1" aria-label="Number of recordings new shows keep"><button type="button" class="btn step" data-check="new-on" data-for="new-keep" data-step="1" aria-label="Keep one more">+</button></span></div>
     </div>
     <div class="btns"><button type="button" class="btn primary" id="new-save">Save</button></div>
     <div id="newMsg"></div>
   </div>
 
-  <div class="card">
+  <div class="card" id="set-space">
     <h2>Free space warning</h2>
     <p class="help">Show a warning on the Manage tab, and in the automatic cleanup's summary, when the DVR has less free space than this.</p>
     <label class="chk"><input type="checkbox" id="space-on"> Warn when free space is low</label>
     <div class="fields">
-      <div><label for="space-gb">Warn below (GB)</label><input type="number" id="space-gb" min="1" aria-label="Free space to warn below, in GB"></div>
+      <div><label for="space-gb">Warn below (GB)</label><span class="num"><button type="button" class="btn step" data-check="space-on" data-for="space-gb" data-step="-10" aria-label="10 GB less">−</button><input type="number" id="space-gb" min="1" aria-label="Free space to warn below, in GB"><button type="button" class="btn step" data-check="space-on" data-for="space-gb" data-step="10" aria-label="10 GB more">+</button></span></div>
     </div>
     <p class="help" id="space-now"></p>
     <div class="btns"><button type="button" class="btn primary" id="space-save">Save</button></div>

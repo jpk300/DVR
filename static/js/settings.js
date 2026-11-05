@@ -118,3 +118,27 @@ export async function saveSchedule(btn) {
   setMsg("autoMsg", j.schedule.enabled ? "✓ Saved. Next run: " + fmtWhen(new Date(j.next)) : "✓ Saved. Automatic cleanup is off.", "good");
   try { state.auto = (await api("api/limits")).auto || state.auto; render("info"); } catch { /* shown next load */ }
 }
+
+/** Settings controls that need wiring once: − / + beside the numbers, the section bar, and the
+ * one-field forms (they only group a field for on-screen keyboards, so they never submit). */
+export function initSettings() {
+  for (const b of document.querySelectorAll("#settings-view .step")) {
+    const btn = /** @type {HTMLButtonElement} */ (b);
+    btn.addEventListener("click", () => {
+      const input = $input(btn.dataset.for || "");
+      const cur = parseInt(input.value, 10);
+      input.value = String(Math.max(1, (cur >= 1 ? cur : 0) + Number(btn.dataset.step)));
+      if (btn.dataset.check) $input(btn.dataset.check).checked = true;   // changing the number means "use it"
+    });
+  }
+  for (const b of document.querySelectorAll("#settings-view .jump button")) {
+    const btn = /** @type {HTMLButtonElement} */ (b);
+    btn.addEventListener("click", () => {
+      const card = $(btn.dataset.to || "");
+      card.scrollIntoView({block: "start"});
+      const first = /** @type {HTMLElement | null} */ (card.querySelector("input:not([tabindex='-1']), button"));
+      first?.focus({preventScroll: true});
+    });
+  }
+  for (const f of document.querySelectorAll("#settings-view form.solo")) f.addEventListener("submit", e => e.preventDefault());
+}

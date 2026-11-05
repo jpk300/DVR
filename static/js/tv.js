@@ -30,7 +30,7 @@ export function isTv() {
 /** @param {Element} e */
 function usable(e) {
   const h = /** @type {HTMLElement} */ (e);
-  if (/** @type {HTMLButtonElement} */ (h).disabled || h.closest("[hidden]")) return false;
+  if (/** @type {HTMLButtonElement} */ (h).disabled || h.closest("[hidden]") || h.getAttribute("tabindex") === "-1") return false;
   const r = h.getBoundingClientRect();
   if (!r.width || !r.height) return false;
   const s = getComputedStyle(h);
@@ -243,6 +243,13 @@ function tvBack() {
 export function initTv() {
   if (!isTv()) return false;
   document.documentElement.classList.add("tv");
+  // numbers are set with the − / + beside them: the boxes only show the value, so the remote skips
+  // them and OK never opens the on-screen keyboard (whose Previous / Next would wander off to other fields)
+  for (const n of document.querySelectorAll("input[type=number]")) {
+    const input = /** @type {HTMLInputElement} */ (n);
+    input.readOnly = true;
+    input.tabIndex = -1;
+  }
   /** @type {any} */ (window).tvBack = tvBack;
   renderHooks.before = describeFocus;
   renderHooks.after = restoreFocus;

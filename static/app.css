@@ -161,6 +161,10 @@ dialog .help { color: var(--muted); }
 /* − and + beside the numbers: only in TV mode, where typing a number means the on-screen keyboard */
 .opt .num { display: inline-flex; flex-direction: row; align-items: center; gap: .3rem; vertical-align: middle; }
 .num .step { display: none; }
+.card .num { display: flex; align-items: center; gap: .3rem; }
+.card .num input { flex: 1 1 auto; min-width: 0; }
+form.solo { margin: 0; }
+.jump { display: none; }
 
 /* ---------- toasts ---------- */
 #toasts { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); z-index: 100;
@@ -271,5 +275,10 @@ html.tv body { padding-bottom: var(--foot-h); }
 .tv .opt input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
 /* room for the focus ring between the − / + group and the words either side */
 .tv .opt .num { margin: 0 .8rem; }
+/* Settings in TV mode: a bar of its sections at the top, so it's clear there's more below */
+.tv .jump { display: flex; flex-wrap: wrap; gap: .8rem; margin: 0 0 .9rem; }
+.tv .jump button { background: #262626; border: 0; border-radius: 8px; padding: .35rem .8rem; cursor: pointer; }
+.tv #settings-view .card { scroll-margin-top: calc(var(--top-h) + .6rem); }
+.tv .card .num input { flex: 0 0 4.5rem; text-align: center; }
 .tv #history-view, .tv #settings-view { max-width: 46rem; }
 .tv #toasts { bottom: calc(var(--foot-h) + 1rem); }
