@@ -1,6 +1,6 @@
 # HDHomeRun DVR Manager
 
-A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.com/hdhomerun.html) DVR. Set a keep rule for each show (keep the newest N, or clear out what you've watched), delete recordings from a browser, and let the cleanup run automatically once a day.
+A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.com/hdhomerun.html) DVR. Set a keep rule for each show (keep the newest N, or clear out what you've watched), delete recordings from a browser or a Fire TV, and let the cleanup run automatically once a day.
 
 > Unofficial. Not affiliated with or endorsed by Silicondust. Deleting a recording is permanent, so try it on a throwaway recording first.
 
@@ -18,6 +18,7 @@ A small self-hosted web app for tidying an [HDHomeRun](https://www.silicondust.c
 - **A rule for new shows**: shows that appear for the first time can get a keep rule (for example "keep the newest 5") automatically
 - **Free space warning** on the Manage tab and in the cleanup summary when the DVR's drive gets low
 - **Settings tab** to change the DVR address from the browser, with a connection test
+- **Fire TV app** that shows the page full-screen, made for the remote (see [Fire TV app](#fire-tv-app))
 - Dark UI inspired by the HDHomeRun app's own Tasks screen
 - Loads each show's recordings in parallel (bounded), with short-lived caching, timeouts, and per-show error handling so one failing show doesn't break the list
 - Runs as one small Docker container
@@ -36,7 +37,22 @@ Open `http://localhost:8080` (or `http://<server-ip>:8080` if it runs on another
 
 Open the **Settings** tab and enter your DVR's IP address, then use **Test connection** and **Save & apply**.
 
-Your keep rules, protected recordings, settings, deletion history and the result of the last automatic run are stored in `./data` (mounted into the container), so they survive rebuilds.
+Your keep rules, protected recordings, settings, deletion history and the result of the last automatic run are stored in `./data` (mounted into the container), so they survive rebuilds. Back up that folder now and then; it's all the app keeps.
+
+### Updating
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+`firetv` is the repository's default branch and has everything, including the Fire TV app's TV mode. `main` is the earlier version, without TV mode or the app, and is no longer updated. A server cloned before `firetv` became the default may still be on `main` (`git branch --show-current` tells you). Move it over once:
+
+```bash
+git fetch
+git switch firetv
+docker compose up -d --build
+```
 
 ## Configuration
 
@@ -65,7 +81,7 @@ The variables below are set under `environment:` in `docker-compose.yml`.
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING` or `ERROR`. Routine runs log at `INFO`; skipped or partly failed runs at `WARNING`; failures at `ERROR`. |
 | `DVR_SCHEDULER` | `1` | Set to `0` to turn off the automatic-cleanup scheduler entirely (for example in tests). |
 
-The scheduler picks up schedule changes as soon as you save them. If a data file is ever damaged (for example hand-edited into invalid JSON), the app logs an error, renames it to `<name>.corrupt-<timestamp>` and carries on with defaults. Fix the file and copy it back to restore it.
+The scheduler picks up schedule changes as soon as you save them. If a data file is ever damaged (for example hand-edited into invalid JSON), the app logs an error, renames it to `<name>.corrupt-<timestamp>` and carries on with defaults. Fix the file and copy it back to restore it. The exception is `protected.json`: carrying on without it could delete recordings you protected, so it's left in place and nothing is deleted until you fix or remove it (see [Protecting recordings](#protecting-recordings)).
 
 If no DVR address is saved, the app falls back to Silicondust's cloud discovery, which only works when you share a public IP with the DVR.
 
@@ -106,17 +122,15 @@ To delete a protected recording, remove its protection first.
 
 Protection is saved in `data/protected.json`, so it survives restarts and rebuilds. Each recording is identified by its program and air time rather than the DVR's address, so protection also survives the DVR getting a new IP address. If a protected recording is deleted outside this app (for example in the HDHomeRun app), its entry stays in the file; it's harmless and protects nothing.
 
+If `protected.json` is ever damaged, the app doesn't guess: every deletion (by hand, keep rules or the daily cleanup) is refused, with a message naming the file, until you fix or remove it.
+
 ## Fire TV app
 
-A Fire TV app shows this page full-screen and works with the Fire TV remote. It switches on a TV mode for the page: arrow-key navigation, larger type, a bold focus ring, a top bar that stays in view, and − / + buttons for numbers. TV mode only switches on inside the app (or with `?tv=1`), so browsers are unaffected. See [firetv/README.md](firetv/README.md) to install it.
+A Fire TV app shows this page full-screen and works with the Fire TV remote. It talks to your DVR Manager server, so the server keeps doing all the work. The app switches on a **TV mode** for the page: arrow-key navigation, larger type, a bold focus ring, a top bar that stays in view, a bar of the Settings sections, and − / + buttons instead of typing numbers.
 
-The default branch is `firetv`, which has everything. `main` is the earlier version, without TV mode or the app, and is no longer updated. If your server was cloned before the switch and is still on `main`, move it over once:
+TV mode only switches on inside the app, so browsers are unaffected. To try it in a browser, open the page with `?tv=1`; that browser tab then stays in TV mode until you open it with `?tv=0`.
 
-```bash
-git fetch
-git switch firetv
-docker compose up -d --build
-```
+The app is built by GitHub Actions and published as a pre-release you install with the Downloader app. See [firetv/README.md](firetv/README.md) for installing, using the remote, and updating it.
 
 ## Run without Docker
 
@@ -155,6 +169,9 @@ The DVR doesn't report per-recording file sizes, so "Used on drive" is total spa
 - **Scheduled shows missing:** check `docker logs hdhr-dvr-manager` for a "Could not load recording rules" warning.
 - **Check the automatic run:** the Manage page shows the next and last run; details are in `docker logs hdhr-dvr-manager`.
 - **Where did an episode go?** The **History** tab lists every deletion this app has made, newest first (the last 1000 are kept in `data/history.jsonl`).
+- **"protected.json in the data folder is damaged":** nothing will be deleted until you fix that file or remove it (removing it clears every protection).
+- **The Fire TV app shows the normal page, not TV mode:** the server is probably still on `main`. See [Updating](#updating).
+- **A browser shows big text and − / + buttons:** that tab is in TV mode. Open the page once with `?tv=0`.
 
 ## Project layout
 
@@ -163,19 +180,20 @@ app.py               Entry point (gunicorn app:app / flask --app app run)
 dvr/                 Backend package
   __init__.py          create_app() and the shared Services
   config.py            deployment settings from the environment, tunables, logging
-  storage.py           settings.json, limits.json, last_run.json (and corrupt-file handling)
+  storage.py           the JSON files in data/ (and damaged-file handling)
   history.py           the deletion history
   dvr_client.py        DvrClient: all DVR and cloud requests, with the SSRF guard
   pruning.py           keep rules and pruning
   scheduler.py         Scheduler: the daily automatic cleanup
   routes.py            the HTTP API (a Flask blueprint), security headers
-firetv/              Fire TV app (Android project) and its install guide
+firetv/              Fire TV app (Android project) and its guide (firetv/README.md)
 static/              Web UI: index.html, app.css
-  js/                  ES modules (main.js is the entry point), type-checked with // @ts-check
+  js/                  ES modules (main.js is the entry point, tv.js is TV mode), type-checked with // @ts-check
+tests/               Tests (standard-library unittest; no DVR needed)
 requirements.txt     Python dependencies
 package.json         ESLint and TypeScript, for checking static/js (no build step)
 pyproject.toml       ruff settings
-.github/workflows/   CI: ruff, a start-up check, ESLint, type check, Docker build
+.github/workflows/   CI (ruff, tests, ESLint, type check, Docker build) and the Fire TV app build
 Dockerfile           Container image
 gunicorn.conf.py     gunicorn settings (one worker) and the scheduler start-up hook
 docker-compose.yml   Example deployment

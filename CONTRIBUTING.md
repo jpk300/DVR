@@ -11,7 +11,7 @@
 5. **Merge with a merge commit** (`gh pr merge --merge`), then delete the branch.
 
 `main` is the earlier line, without TV mode or the Fire TV app. It isn't updated any more; everything
-goes into `firetv`.
+goes into `firetv`. Pull requests target `firetv` by default.
 
 ## Commit messages
 
@@ -32,13 +32,17 @@ Deleting a recording is permanent, so try changes on a throwaway recording first
 
 ## Checks
 
-CI runs these on every pull request. Run them locally before you push:
+CI runs these on every pull request and on every push to `firetv`. Run them locally before you push:
 
 ```bash
 pip install ruff==0.8.4 && ruff check .
 python -m unittest discover -s tests   # tests/: data files, login, request checks (no DVR needed)
 npm ci && npm run check      # ESLint and the JSDoc type check for static/js
 ```
+
+A change under `firetv/` also builds the Fire TV app (see [firetv/README.md](firetv/README.md#how-it-fits-together)).
+Changes to the page are tested in a browser at TV size too: open it with `?tv=1` and a window about
+960×540, and move around with the arrow keys and Enter.
 
 `create_app()` takes a `Config`, so you can build an app for a test with its own data folder and no environment variables (see `tests/test_app.py`):
 
@@ -56,11 +60,13 @@ client = app.test_client()
 | `app.py` | Entry point only: `app = create_app()` |
 | `dvr/__init__.py` | `create_app(config)` and `Services` (storage, client, history, scheduler), held on `app.extensions["dvr"]` |
 | `dvr/config.py` | `Config` (deployment settings from the environment), tunables, logging setup |
-| `dvr/storage.py` | `Storage`: settings, keep rules and the last run, with corrupt-file handling. `settings.json` is the only source of user settings |
+| `dvr/storage.py` | `Storage`: the JSON files in `data/` (settings, keep rules, protected recordings, shows seen, last run), with damaged-file handling. `settings.json` is the only source of user settings |
 | `dvr/history.py` | `History`: the deletion log |
 | `dvr/dvr_client.py` | `DvrClient`: all DVR and cloud requests, and the SSRF guard. Any new DVR request must go through `DvrClient.fetch()` |
-| `dvr/pruning.py` | Keep rules (pure functions) and `run_prune()` |
+| `dvr/pruning.py` | Keep rules (pure functions), the new-show rule (`adopt_new_shows()`) and `run_prune()` |
 | `dvr/scheduler.py` | `Scheduler`: the daily automatic cleanup |
 | `dvr/routes.py` | The HTTP API as a blueprint; it gets shared objects from `current_app`, never from module globals |
-| `static/js/` | ES modules: `main.js` (wiring), `state.js` (shared state and the render registry), `actions.js`, `list.js`, `panel.js`, `ruledialog.js`, `history.js`, `settings.js`, `views.js`, plus `api.js`, `dom.js`, `format.js`, `rules.js`, `ui.js`, `types.js` (JSDoc types). Every file starts with `// @ts-check` |
+| `static/js/` | ES modules: `main.js` (wiring), `state.js` (shared state and the render registry), `actions.js`, `list.js`, `panel.js`, `ruledialog.js`, `history.js`, `settings.js`, `views.js`, `tv.js` (TV mode), plus `api.js`, `dom.js`, `format.js`, `rules.js`, `ui.js`, `types.js` (JSDoc types). Every file starts with `// @ts-check` |
 | `static/` | `index.html`, `app.css`. No inline scripts or styles: the Content-Security-Policy blocks them |
+| `tests/` | `test_app.py`: data files, the new-show rule, the free space warning, login and request checks |
+| `firetv/` | The Fire TV app (Android, one Activity) and its guide |

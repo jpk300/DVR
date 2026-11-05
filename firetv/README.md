@@ -2,19 +2,19 @@
 
 A small Fire TV app that shows your DVR Manager server's page full-screen, made to work with the Fire TV remote.
 
-The app is only a screen and a remote. Your **DVR Manager server still does all the work** (keep rules, protection, history, the daily cleanup), so it must be running on your home network. The server's page has a **TV mode**, which the app switches on. It's on `firetv`, the repository's default branch.
+The app is only a screen and a remote. Your **DVR Manager server still does all the work** (keep rules, protection, history, the daily cleanup), so it must be running on your home network. The server's page has a **TV mode**, which the app switches on. Browsers are unaffected.
 
-## 1. Run the server from the `firetv` branch
+## 1. Set up the server
 
-TV mode is on the `firetv` branch, so the server the app talks to must run it. A new clone is already on it. If your server was cloned earlier and is still on `main`, switch it once, in the folder where you cloned the repo:
+Follow the [Quick start](../README.md#quick-start) in the main README. A fresh clone is on `firetv`, the default branch, which has TV mode.
+
+If your server was cloned before `firetv` became the default, it may still be on `main`, which doesn't have TV mode. Check with `git branch --show-current`, and if it says `main`, switch once, in the folder where you cloned the repo:
 
 ```bash
 git fetch
 git switch firetv
 docker compose up -d --build
 ```
-
-Normal browsers are unaffected: TV mode only switches on inside the app (or when you open the page with `?tv=1`).
 
 ## 2. Install the app on the Fire TV
 
@@ -66,7 +66,7 @@ Everything on the page works from the remote. Typing (search, the DVR address, t
 
 ## Updating the app
 
-Every change to `firetv/` on the `firetv` branch builds a new APK and replaces the download at the address above. To update, reinstall it with Downloader the same way.
+Most changes are to the server's page, and reach the TV when you [update the server](#updating-the-server); the app doesn't change. Only a change under `firetv/` builds a new APK, which replaces the download at the address above. To update the app, reinstall it with Downloader the same way.
 
 By default the APK is a **debug build**, signed with a key that changes every build. Android then refuses to install it over the old one, so **uninstall the old version first**: **Settings → Applications → Manage Installed Applications → DVR Manager → Uninstall**. The server address is forgotten, so enter it again.
 
@@ -85,17 +85,17 @@ Keep `dvr-firetv.jks` somewhere safe, outside the repo; git ignores `*.jks` here
 
 ## Updating the server
 
-`firetv` is the default branch, so every change lands there. To bring your server up to date:
+To bring your server up to date, in the folder where you cloned the repo:
 
 ```bash
 git pull
 docker compose up -d --build
 ```
 
-The app itself only needs reinstalling when something under `firetv/` changes.
+Then reopen the app on the Fire TV. It only needs reinstalling when something under `firetv/` changes.
 
 ## How it fits together
 
-- `static/js/tv.js` is TV mode in the web page. It moves focus with the arrow keys, keeping to areas of the page (the `AREAS` list), keeps focus in place when the page redraws, makes OK tick checkboxes, and provides `window.tvBack()` for the Back button. Larger type, the focus ring, the fixed top bar and the keep-rule dialog's − and + buttons are in `static/app.css`, under "TV mode". `static/js/ruledialog.js` makes the dialog work with OK and − / +.
+- `static/js/tv.js` is TV mode in the web page. It moves focus with the arrow keys, keeping to areas of the page (the `AREAS` list), keeps focus in place when the page redraws, makes OK tick checkboxes, and provides `window.tvBack()` for the Back button. It also makes number boxes read-only, so − / + set them and the on-screen keyboard never opens for them. Larger type, the focus ring, the fixed top and bottom bars, the Settings section bar and the − / + buttons are styled in `static/app.css`, under "TV mode". `static/js/ruledialog.js` and `static/js/settings.js` handle − / + in the keep-rule dialog and on Settings.
 - `firetv/android/` is the Android app: one Activity (`MainActivity.java`), with no libraries. It opens `http://<server>/?tv=1` in a full-screen WebView, sends Back to the page first, uses Menu to change the server, and asks for a user name and password if the server uses `APP_USER` / `APP_PASS`.
-- `.github/workflows/firetv.yml` builds the APK with Gradle on GitHub Actions and publishes it as the `firetv-latest` pre-release. There's no Gradle wrapper; CI installs Gradle 8.10.2. To build locally you need JDK 17, the Android SDK and Gradle: `cd firetv/android && gradle assembleDebug`.
+- `.github/workflows/firetv.yml` builds the APK with Gradle on GitHub Actions whenever `firetv/` changes on the `firetv` branch, and publishes it as the `firetv-latest` pre-release. There's no Gradle wrapper; CI installs Gradle 8.10.2. To build locally you need JDK 17, the Android SDK and Gradle: `cd firetv/android && gradle assembleDebug`.
