@@ -20,6 +20,10 @@ jobs:
         run: pip install -r requirements.txt ruff==0.8.4
       - name: Lint (ruff)
         run: ruff check .
+      - name: Tests
+        env:
+          DVR_SCHEDULER: "0"
+        run: python -m unittest discover -s tests -v
       - name: App starts
         env:
           DVR_SCHEDULER: "0"

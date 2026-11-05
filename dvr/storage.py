@@ -2,6 +2,9 @@
 
 A file that isn't valid JSON (hand-edited, or cut short by a full disk) doesn't take the app
 down: it is renamed to <name>.corrupt-<timestamp>, an error is logged, and defaults are used.
+The exception is protected.json: falling back to "nothing is protected" could let a cleanup
+delete exactly the recordings the user protected, so a damaged one is left in place and every
+deletion is refused (StorageError) until it is fixed or removed.
 """
 import json
 import logging
@@ -18,9 +21,15 @@ TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 HOST_RE = re.compile(r"^[A-Za-z0-9]([A-Za-z0-9.-]*[A-Za-z0-9])?(:\d{1,5})?$")
 
 
+class StorageError(RuntimeError):
+    """A data file the app can't safely do without is unreadable."""
+
+
 def clean_host(raw):
     """An address typed by a user, without scheme or path, or None if it isn't a valid host[:port]."""
-    h = (raw or "").strip()
+    if not isinstance(raw, str):
+        return None
+    h = raw.strip()
     for prefix in ("http://", "https://"):
         if h.lower().startswith(prefix):
             h = h[len(prefix):]
@@ -53,16 +62,28 @@ class Storage:
 
     # ---------- low level ----------
     def write_json(self, path, obj):
-        """Write JSON atomically: a crash mid-write leaves the old file, never a half-written one."""
+        """Write JSON atomically and durably: a crash or power cut mid-write leaves the old file,
+        never a half-written or empty one (the data is flushed to disk before the rename)."""
         os.makedirs(self.data_dir, exist_ok=True)
         tmp = path + ".tmp"
         with open(tmp, "w") as f:
             json.dump(obj, f, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
         os.replace(tmp, path)
+        try:  # make the rename itself durable too (best effort; not every platform allows it)
+            fd = os.open(self.data_dir, os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        except OSError:
+            pass
 
-    def read_json(self, path, expect=dict):
+    def read_json(self, path, expect=dict, quarantine=True):
         """The file's contents, or None if it doesn't exist. A file that isn't valid JSON of the
-        expected type is moved aside (see module docstring) and None is returned."""
+        expected type is moved aside (see module docstring) and None is returned, or, with
+        quarantine=False, left where it is and StorageError is raised."""
         with self._file_lock:
             try:
                 with open(path) as f:
@@ -70,14 +91,19 @@ class Storage:
             except FileNotFoundError:
                 return None
             except (ValueError, UnicodeDecodeError) as e:
-                self._quarantine(path, f"it isn't valid JSON ({e})")
-                return None
-            if not isinstance(data, expect):
+                why = f"it isn't valid JSON ({e})"
+            else:
+                if isinstance(data, expect):
+                    return data
                 names = {dict: "object", list: "array"}
-                self._quarantine(path, f"it should hold a JSON {names.get(expect, expect.__name__)}, "
-                                       f"not {names.get(type(data), type(data).__name__)}")
-                return None
-            return data
+                why = (f"it should hold a JSON {names.get(expect, expect.__name__)}, "
+                       f"not {names.get(type(data), type(data).__name__)}")
+            if not quarantine:
+                log.error("Could not read %s because %s", path, why)
+                raise StorageError(f"{os.path.basename(path)} in the data folder is damaged ({why}). "
+                                   "Nothing will be deleted until it is fixed or removed.")
+            self._quarantine(path, why)
+            return None
 
     def _quarantine(self, path, why):
         dest = f"{path}.corrupt-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
@@ -159,8 +185,9 @@ class Storage:
 
     # ---------- protected recordings ----------
     def protected(self):
-        """{recording key: details} for every recording the user has protected from deletion."""
-        return self.read_json(self.protected_path) or {}
+        """{recording key: details} for every recording the user has protected from deletion.
+        Raises StorageError if protected.json is damaged, so nothing is deleted unprotected."""
+        return self.read_json(self.protected_path, quarantine=False) or {}
 
     def set_protected(self, key, details=None):
         """Protect a recording (details given) or unprotect it (details None). Returns all of them."""

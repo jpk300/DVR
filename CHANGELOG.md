@@ -7,6 +7,7 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 ## [Unreleased]
 
 ### Added
+- Tests (`tests/`, standard-library `unittest`) for the data files, login and request checks, run in CI.
 - **Protect recordings**: a lock button on each recording. Protected recordings can't be deleted by hand,
   by keep rules or by the automatic cleanup (the server refuses, not just the page). They don't count
   toward a rule's N. Stored in `data/protected.json` by program and air time; `POST /api/protect`.
@@ -33,6 +34,7 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 - Keyboard access: sort tabs, show rows and keep-limit cells work with Tab, Enter and Space.
 
 ### Changed
+- `requests` 2.32.4 and `gunicorn` 23.0.0, the releases with their latest security fixes.
 - `settings.json` is the only source of the DVR address and schedule. `DVR_HOST`, `DVR_STORAGE_URL`, `TZ`
   and `AUTO_PRUNE_*` are copied into it once, on first start, and ignored after that. The Settings tab no
   longer shows a "server default".
@@ -59,6 +61,13 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
   failures at ERROR.
 
 ### Fixed
+- A damaged `data/protected.json` no longer means "nothing is protected". It is left in place and every
+  deletion (by hand, keep rules or the automatic cleanup) is refused, with a message naming the file,
+  until it is fixed or removed. Before, the next cleanup could delete the recordings you had protected.
+- Data files are flushed to disk before they replace the old copy, so a power cut can't leave an empty one.
+- The login check (`APP_USER` / `APP_PASS`) compares in constant time.
+- Settings requests with a field of the wrong type (a number as the DVR address, say) get a 400 instead
+  of a server error; a non-text DVR address no longer clears the saved one.
 - Selecting episodes and then switching shows no longer leaves hidden recordings selected for deletion.
 - Network failures and server errors show a message instead of leaving the page stuck on "Loading…".
 - The "automatic cleanup is off" hint pointed at an environment variable; it now links to Settings.
