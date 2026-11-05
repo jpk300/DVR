@@ -1,0 +1,51 @@
+plugins {
+    id "com.android.application"
+}
+
+// Release signing is optional: set these environment variables (CI reads them from repository
+// secrets) to sign with your own key, so new builds install over old ones. Without them CI builds
+// a debug APK, which works but must be uninstalled before installing a newer build.
+def ksFile = System.getenv("FIRETV_KEYSTORE_FILE")
+def signed = ksFile != null && file(ksFile).exists()
+
+android {
+    namespace "com.jpk300.dvrmanager"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.jpk300.dvrmanager.tv"
+        minSdk 22          // Fire OS 5 (first-generation Fire TV Stick) and later
+        targetSdk 34
+        // CI's run number, so each build is newer than the last
+        versionCode((System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInteger())
+        versionName "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "0")
+    }
+
+    signingConfigs {
+        if (signed) {
+            release {
+                storeFile file(ksFile)
+                storePassword System.getenv("FIRETV_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("FIRETV_KEY_ALIAS")
+                keyPassword System.getenv("FIRETV_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (signed) signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The DVR Manager server runs on the home network over plain http://, so allow cleartext.
+     (Android 9+ blocks it by default.) -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>
