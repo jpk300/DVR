@@ -12,6 +12,14 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
   published as the `firetv-latest` pre-release for sideloading with Downloader. See `firetv/README.md`.
 - **TV mode** for the page (`?tv=1`, used by the app): the arrow keys move focus to the nearest control,
   OK ticks checkboxes, focus survives redraws, and the type is larger with a bold focus ring.
+  - The top bar stays at the top of the screen while the page scrolls.
+  - ▲ / ▼ stay within an area (the recordings panel, the show list, the top bar) until it has nothing
+    further that way. ◀ / ▶ move along the same line.
+  - The recordings panel scrolls back to the top, picture included, when you reach its top or leave it.
+  - The keep-rule dialog has − and + buttons for its numbers. OK on an option chooses it rather than
+    saving, and "Keep the newest" starts at the show's current count, so it deletes nothing until lowered.
+- A green Fire TV banner and launcher icon, with the banner set on the launch activity so the home
+  row shows the full-width tile.
 - **Protect recordings**: a lock button on each recording. Protected recordings can't be deleted by hand,
   by keep rules or by the automatic cleanup (the server refuses, not just the page). They don't count
   toward a rule's N. Stored in `data/protected.json` by program and air time; `POST /api/protect`.

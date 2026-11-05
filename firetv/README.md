@@ -52,7 +52,15 @@ adb install -r dvr-manager-firetv.apk
 | **Back** | Close the open dialog. On History or Settings, return to Manage. On Manage, leave the app |
 | **☰ Menu** | Change the server address |
 
-Everything on the page works from the remote. Typing (search, the server address, rule numbers) opens the Fire TV keyboard.
+Everything on the page works from the remote. Typing (search, the server address) opens the Fire TV keyboard.
+
+**Moving around:**
+- The top bar (**Manage**, **History**, **Settings**) stays at the top of the screen while you scroll.
+- ▲ and ▼ stay inside the area you're in: a show's recordings panel on the left, the show list on the right, or the top bar. They only move on when nothing is left in that direction, and then only to what's directly above or below, such as the top bar.
+- ◀ and ▶ move along the same line: between a recording's checkbox and its lock, or across from the panel to the show list.
+- The recordings panel scrolls on its own to reach older recordings. Moving back up to its top, or across to the show list, scrolls it back to the top, so the show's picture is in view again.
+
+**Changing a keep rule:** highlight a show's **Keep** button and press OK. In the dialog, move to an option and press OK to choose it, then press ▶ to reach **−** and **+** and set the number. The line under the options says what the rule would delete. Move down to **Save rule** and press OK, or press Back to cancel.
 
 ## Updating the app
 
@@ -88,6 +96,6 @@ Then rebuild the server (`docker compose up -d --build`). The app itself only ne
 
 ## How it fits together
 
-- `static/js/tv.js` is TV mode in the web page. It moves focus with the arrow keys, keeps focus in place when the page redraws, makes OK tick checkboxes, and provides `window.tvBack()` for the Back button. Larger type and the focus ring are in `static/app.css`, under "TV mode".
+- `static/js/tv.js` is TV mode in the web page. It moves focus with the arrow keys, keeping to areas of the page (the `AREAS` list), keeps focus in place when the page redraws, makes OK tick checkboxes, and provides `window.tvBack()` for the Back button. Larger type, the focus ring, the fixed top bar and the keep-rule dialog's − and + buttons are in `static/app.css`, under "TV mode". `static/js/ruledialog.js` makes the dialog work with OK and − / +.
 - `firetv/android/` is the Android app: one Activity (`MainActivity.java`), with no libraries. It opens `http://<server>/?tv=1` in a full-screen WebView, sends Back to the page first, uses Menu to change the server, and asks for a user name and password if the server uses `APP_USER` / `APP_PASS`.
 - `.github/workflows/firetv.yml` builds the APK with Gradle on GitHub Actions and publishes it as the `firetv-latest` pre-release. There's no Gradle wrapper; CI installs Gradle 8.10.2. To build locally you need JDK 17, the Android SDK and Gradle: `cd firetv/android && gradle assembleDebug`.

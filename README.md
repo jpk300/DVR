@@ -102,7 +102,7 @@ Protection is saved in `data/protected.json`, so it survives restarts and rebuil
 
 ## Fire TV app
 
-This branch (`firetv`) adds a Fire TV app that shows this page full-screen and works with the Fire TV remote, plus a TV mode for the page (arrow-key navigation, larger type, a bold focus ring). See [firetv/README.md](firetv/README.md) to install it. The server must run this branch for TV mode to be available.
+This branch (`firetv`) adds a Fire TV app that shows this page full-screen and works with the Fire TV remote, plus a TV mode for the page (arrow-key navigation, larger type, a bold focus ring, a top bar that stays in view, and − / + buttons for keep-rule numbers). See [firetv/README.md](firetv/README.md) to install it. The server must run this branch for TV mode to be available.
 
 ## Run without Docker
 
