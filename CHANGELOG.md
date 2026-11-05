@@ -19,6 +19,9 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
   - The recordings panel scrolls back to the top, picture included, when you reach its top or leave it.
   - The keep-rule dialog has − and + buttons for its numbers. OK on an option chooses it rather than
     saving, and "Keep the newest" starts at the show's current count, so it deletes nothing until lowered.
+  - Every number is set with − and +, never the on-screen keyboard. The DVR address and timezone fields
+    are each grouped on their own, so the keyboard's Previous / Next can't jump to a field you can't see.
+  - Settings has a bar of its sections at the top, so you can see there are four and jump to any of them.
 - A green Fire TV banner and launcher icon, with the banner set on the launch activity so the home
   row shows the full-width tile.
 - **A rule for new shows** (Settings → New shows): a show the app sees for the first time gets "keep the

@@ -52,7 +52,9 @@ adb install -r dvr-manager-firetv.apk
 | **Back** | Close the open dialog. On History or Settings, return to Manage. On Manage, leave the app |
 | **☰ Menu** | Change the server address |
 
-Everything on the page works from the remote. Typing (search, the server address) opens the Fire TV keyboard.
+Everything on the page works from the remote. Typing (search, the DVR address, the timezone) opens the Fire TV keyboard. Numbers are never typed: each one has **−** and **+** beside it.
+
+**Settings:** a bar at the top lists its four sections (DVR connection, Automatic cleanup, New shows, Free space warning). Press OK on one to jump to it, or press ▼ to go through them in order.
 
 **Moving around:**
 - The top bar (**Manage**, **History**, **Settings**) stays at the top of the screen while you scroll. The automatic-cleanup status (on or off, next run, last run) is in a bar along the bottom.
