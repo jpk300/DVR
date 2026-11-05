@@ -269,10 +269,12 @@ html.tv body { padding-bottom: var(--foot-h); }
 .tv input[type=checkbox], .tv input[type=radio] { width: 1.25rem; height: 1.25rem; }
 .tv dialog { width: min(34rem, 90vw); padding: 1.3rem; }
 .tv .num .step { display: inline-flex; justify-content: center; min-width: 2.2rem; padding: .25rem .5rem; font-size: 1.1rem; font-weight: 700; }
-.tv .opt input[type=number] { width: 3.4rem; text-align: center; appearance: textfield; -moz-appearance: textfield; }
-/* − and + replace the number's own up/down arrows, which a remote can't use */
-.tv .opt input[type=number]::-webkit-inner-spin-button,
-.tv .opt input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
+.tv .opt input[type=number] { width: 3.4rem; text-align: center; }
+/* − and + replace every number's own up/down arrows (in TV mode the boxes are read-only, so the
+   arrows would do nothing) */
+.tv input[type=number] { appearance: textfield; -moz-appearance: textfield; }
+.tv input[type=number]::-webkit-inner-spin-button,
+.tv input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
 /* room for the focus ring between the − / + group and the words either side */
 .tv .opt .num { margin: 0 .8rem; }
 /* Settings in TV mode: a bar of its sections at the top, so it's clear there's more below */
