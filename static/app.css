@@ -238,13 +238,17 @@ html.tv body { font-size: 1rem; padding: 0 1.2vw; }            /* a little room 
 .tv .lock:focus, .tv .lock.tv-focus { color: var(--text); }
 .tv #panel .hd { flex-wrap: wrap; gap: .15rem .6rem; }
 .tv #panel .hd .link { white-space: nowrap; }
-.tv .top { padding: .7rem 1.4rem .4rem; }
+.tv { --top-h: 3.6rem; scroll-padding-top: calc(var(--top-h) + .6rem); }   /* keep focused items clear of the bar */
+/* the top bar stays put while the page scrolls under it */
+.tv .top { position: sticky; top: 0; z-index: 5; height: var(--top-h); padding: 0 1.4rem; background: var(--bg);
+           box-shadow: 0 .4rem .6rem -.3rem rgba(0, 0, 0, .7); }
+.tv #side { top: calc(var(--top-h) + .6rem); max-height: calc(100vh - var(--top-h) - 1.2rem); overflow-y: auto; }
 .tv .top nav button { font-size: 1.05rem; padding: .35rem .8rem; }
 .tv .layout { grid-template-columns: 21rem 1fr; gap: 1.2rem; padding: .4rem 1.4rem 2rem; }
 .tv .row { grid-template-columns: 1fr 12rem; }
 .tv .row > *, .tv .row-main > span { min-height: 3.4rem; }
 .tv .row-main { grid-template-columns: 3.4rem 1fr; }
-.tv .eps { max-height: 46vh; }
+.tv .eps { max-height: 36vh; }
 .tv .lock { width: 2.2rem; height: 2.2rem; }
 .tv input[type=checkbox], .tv input[type=radio] { width: 1.25rem; height: 1.25rem; }
 .tv dialog { width: min(34rem, 90vw); padding: 1.3rem; }
