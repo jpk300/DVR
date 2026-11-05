@@ -33,10 +33,11 @@ CI runs these on every pull request. Run them locally before you push:
 
 ```bash
 pip install ruff==0.8.4 && ruff check .
+python -m unittest discover -s tests   # tests/: data files, login, request checks (no DVR needed)
 npm ci && npm run check      # ESLint and the JSDoc type check for static/js
 ```
 
-`create_app()` takes a `Config`, so you can build an app for a test with its own data folder and no environment variables:
+`create_app()` takes a `Config`, so you can build an app for a test with its own data folder and no environment variables (see `tests/test_app.py`):
 
 ```python
 from dvr import create_app

@@ -1,5 +1,6 @@
 """The HTTP API, as a Flask blueprint. Shared objects come from current_app.extensions["dvr"]
 (see Services in __init__.py), never from module globals."""
+import hmac
 from datetime import datetime, timezone
 from functools import lru_cache
 from zoneinfo import available_timezones
@@ -10,7 +11,7 @@ from .config import HISTORY_MAX, MAX_DELETE_BATCH
 from .dvr_client import episode_index, friendly
 from .pruning import PlanChanged, build_plan, normalize_rule, normalized_limits, run_prune
 from .scheduler import next_run_iso, schedule_config
-from .storage import TIME_RE, clean_host, valid_tz
+from .storage import TIME_RE, StorageError, clean_host, valid_tz
 
 bp = Blueprint("dvr", __name__)
 
@@ -51,13 +52,25 @@ def json_body():
     return body if isinstance(body, dict) else None
 
 
+def text(body, name):
+    """A string field from a JSON body, stripped ("" if it is missing or not a string)."""
+    v = body.get(name)
+    return v.strip() if isinstance(v, str) else ""
+
+
+def same(given, expected):
+    """Compare a submitted credential with the configured one in constant time."""
+    return hmac.compare_digest((given or "").encode(), (expected or "").encode())
+
+
 @bp.before_app_request
 def check_auth():
     cfg = svc().config
     if not cfg.app_user:
         return None
     a = request.authorization
-    if a and a.username == cfg.app_user and a.password == cfg.app_pass:
+    # both are always compared, so the time taken doesn't reveal which one was wrong
+    if a and cfg.app_pass is not None and same(a.username, cfg.app_user) & same(a.password, cfg.app_pass):
         return None
     return Response("Login required", 401, {"WWW-Authenticate": 'Basic realm="DVR"'})
 
@@ -65,6 +78,12 @@ def check_auth():
 @bp.before_app_request
 def ensure_scheduler():
     svc().scheduler.ensure_started()
+
+
+@bp.app_errorhandler(StorageError)
+def storage_error(e):
+    """A data file the app needs is damaged (see storage.py): say which, as JSON the page can show."""
+    return error(str(e), 500)
 
 
 @bp.after_app_request
@@ -331,7 +350,9 @@ def test_settings():
 def update_settings():
     body = json_body() or {}
     s = svc()
-    if not (body.get("dvr_host") or "").strip():
+    if not isinstance(body.get("dvr_host"), (str, type(None))):
+        return error("Enter an IP address or hostname, like 192.168.1.50", 400)
+    if not text(body, "dvr_host"):
         # empty = forget the saved address (the app falls back to cloud discovery)
         s.storage.update_settings(remove=("dvr_host",))
         s.client.reset_caches()
@@ -347,10 +368,9 @@ def update_settings():
 @bp.post("/api/settings/schedule")
 def update_schedule():
     b = json_body() or {}
-    t = (b.get("time") or "").strip()
-    tz = (b.get("tz") or "").strip()
+    t, tz = text(b, "time"), text(b, "tz")
     try:
-        mx = int(b.get("max"))
+        mx = int(b.get("max")) if not isinstance(b.get("max"), bool) else 0
     except (TypeError, ValueError):
         mx = 0
     if not TIME_RE.match(t):
