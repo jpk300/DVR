@@ -40,8 +40,16 @@ const renderers = {};
 /** @param {Part} part @param {() => void} fn */
 export function registerRenderer(part, fn) { renderers[part] = fn; }
 
+/**
+ * Optional hooks around every redraw (TV mode uses them to keep the remote's focus in place).
+ * @type {{before: (() => any) | null, after: ((saved: any) => void) | null}}
+ */
+export const renderHooks = {before: null, after: null};
+
 /** Redraw the given parts, or all of them. @param {...Part} parts */
 export function render(...parts) {
   const list = parts.length ? parts : /** @type {Part[]} */ (Object.keys(renderers));
+  const saved = renderHooks.before?.();
   for (const p of list) renderers[p]?.();
+  renderHooks.after?.(saved);
 }

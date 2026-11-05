@@ -9,7 +9,10 @@ import "./panel.js";   // registers the panel renderer
 import {initRuleDialog} from "./ruledialog.js";
 import {browserTz, saveSchedule, submitHost} from "./settings.js";
 import {render, state} from "./state.js";
+import {focusFirstShow, initTv} from "./tv.js";
 import {showView} from "./views.js";
+
+const tv = initTv();   // TV mode (Fire TV app, or ?tv=1): remote navigation and 10-foot styling
 
 $input("q").oninput = () => { state.query = $input("q").value; render("list"); };
 $input("hq").oninput = renderHistory;
@@ -44,4 +47,4 @@ document.addEventListener("keydown", e => {
 });
 
 initRuleDialog();
-load(false);
+load(false).then(() => { if (tv) focusFirstShow(); });

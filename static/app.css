@@ -225,3 +225,28 @@ dialog .help { color: var(--muted); }
   .keep-pill { font-size: .85rem; padding: .3rem .6rem; white-space: normal; text-align: center; line-height: 1.15; }
 }
 @media (max-width: 380px) { .brand { display: none; } }
+
+/* ---------- TV mode (the Fire TV app, or any browser with ?tv=1) ---------- */
+/* Sizes scale with the screen: 16px text on a 960-pixel-wide Fire TV page, and up from there. */
+html.tv { font-size: calc(100vw / 60); }
+html.tv body { font-size: 1rem; padding: 0 1.2vw; }            /* a little room for TVs that crop the edges */
+/* a bold focus ring that reads from across the room */
+.tv :focus, .tv :focus-visible, .tv .tv-focus { outline: .22rem solid #ffd36e; outline-offset: .12rem; }
+.tv .row-main:focus, .tv .row-main.tv-focus { outline: 0; }
+.tv .row-main:focus > span, .tv .row-main.tv-focus > span { box-shadow: inset 0 0 0 .22rem #ffd36e; }
+.tv .keep-pill:focus, .tv .keep-pill.tv-focus { background: rgba(255, 211, 110, .18); }
+.tv .lock:focus, .tv .lock.tv-focus { color: var(--text); }
+.tv #panel .hd { flex-wrap: wrap; gap: .15rem .6rem; }
+.tv #panel .hd .link { white-space: nowrap; }
+.tv .top { padding: .7rem 1.4rem .4rem; }
+.tv .top nav button { font-size: 1.05rem; padding: .35rem .8rem; }
+.tv .layout { grid-template-columns: 21rem 1fr; gap: 1.2rem; padding: .4rem 1.4rem 2rem; }
+.tv .row { grid-template-columns: 1fr 12rem; }
+.tv .row > *, .tv .row-main > span { min-height: 3.4rem; }
+.tv .row-main { grid-template-columns: 3.4rem 1fr; }
+.tv .eps { max-height: 46vh; }
+.tv .lock { width: 2.2rem; height: 2.2rem; }
+.tv input[type=checkbox], .tv input[type=radio] { width: 1.25rem; height: 1.25rem; }
+.tv dialog { width: min(34rem, 90vw); padding: 1.3rem; }
+.tv #history-view, .tv #settings-view { max-width: 46rem; }
+.tv #toasts { bottom: 2rem; }

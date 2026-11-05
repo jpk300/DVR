@@ -68,6 +68,7 @@ function renderPanel() {
     const list = el("div", "eps");
     for (const e of eps) {
       const row = el("label", "ep" + (e.Protected ? " protected" : ""));
+      row.dataset.cmd = e.CmdURL;
       const cb = el("input");
       cb.type = "checkbox"; cb.checked = !e.Protected && state.selected.has(e.CmdURL);
       cb.disabled = !!e.Protected;
