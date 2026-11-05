@@ -50,6 +50,7 @@ input[type=checkbox], input[type=radio] { width: 1.05rem; height: 1.05rem; accen
 #info { color: var(--muted); font-size: .9rem; min-width: 0; }
 #info .ok { color: var(--ok); font-weight: 600; }
 #info .auto { margin-top: .15rem; }
+#info .low { margin-top: .15rem; color: var(--warn); font-weight: 600; }
 #status { color: var(--warn); font-size: .9rem; }
 #status:not(:empty) { margin-bottom: .5rem; }
 

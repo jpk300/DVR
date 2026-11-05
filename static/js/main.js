@@ -7,7 +7,7 @@ import {renderHistory} from "./history.js";
 import "./list.js";    // registers the list and info renderers
 import "./panel.js";   // registers the panel renderer
 import {initRuleDialog} from "./ruledialog.js";
-import {browserTz, saveSchedule, submitHost} from "./settings.js";
+import {browserTz, saveNewShows, saveSchedule, saveSpaceWarning, submitHost} from "./settings.js";
 import {render, state} from "./state.js";
 import {showView} from "./views.js";
 
@@ -26,6 +26,8 @@ $("tabs").onclick = e => {
 $("refresh").onclick = () => busy($button("refresh"), () => load(true));
 $("apply-all").onclick = () => busy($button("apply-all"), () => doPrune());
 $("auto-save").onclick = () => saveSchedule($button("auto-save"));
+$("new-save").onclick = () => saveNewShows($button("new-save"));
+$("space-save").onclick = () => saveSpaceWarning($button("space-save"));
 $("tz-browser").onclick = () => { $input("auto-tz").value = browserTz(); $("tz-note").hidden = true; };
 $("tab-manage").onclick = () => showView("main");
 $("tab-history").onclick = () => showView("history");

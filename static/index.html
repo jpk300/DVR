@@ -96,6 +96,29 @@
     <div class="btns"><button type="button" class="btn primary" id="auto-save">Save schedule</button></div>
     <div id="autoMsg"></div>
   </div>
+
+  <div class="card">
+    <h2>New shows</h2>
+    <p class="help">When a show appears for the first time (a new series, a movie, or a show you just scheduled), give it a keep rule automatically. You can change it on the show like any other rule. Shows you already have aren't changed.</p>
+    <label class="chk"><input type="checkbox" id="new-on"> Give new shows a keep rule</label>
+    <div class="fields">
+      <div><label for="new-keep">Keep the newest</label><input type="number" id="new-keep" min="1" aria-label="Number of recordings new shows keep"></div>
+    </div>
+    <div class="btns"><button type="button" class="btn primary" id="new-save">Save</button></div>
+    <div id="newMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>Free space warning</h2>
+    <p class="help">Show a warning on the Manage tab, and in the automatic cleanup's summary, when the DVR has less free space than this.</p>
+    <label class="chk"><input type="checkbox" id="space-on"> Warn when free space is low</label>
+    <div class="fields">
+      <div><label for="space-gb">Warn below (GB)</label><input type="number" id="space-gb" min="1" aria-label="Free space to warn below, in GB"></div>
+    </div>
+    <p class="help" id="space-now"></p>
+    <div class="btns"><button type="button" class="btn primary" id="space-save">Save</button></div>
+    <div id="spaceMsg"></div>
+  </div>
 </main>
 
 <!-- confirm before deleting -->

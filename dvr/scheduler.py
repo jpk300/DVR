@@ -39,6 +39,19 @@ def schedule_config(settings):
     }
 
 
+def low_space_bytes(settings):
+    """The free space (in bytes) below which to warn (Settings > Free space warning), or None."""
+    gb = settings.get("low_space_gb")
+    return gb * 10**9 if isinstance(gb, int) and not isinstance(gb, bool) and gb >= 1 else None
+
+
+def low_space_note(free, warn_below):
+    """A warning sentence if free bytes are below the warning level, else ""."""
+    if not (isinstance(free, (int, float)) and warn_below and free < warn_below):
+        return ""
+    return f"Free space is low: {free / 1e9:.1f} GB left (warning below {warn_below / 1e9:.0f} GB)."
+
+
 def next_run(now, hh, mm):
     t = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
     return t if t > now else t + timedelta(days=1)
@@ -149,6 +162,15 @@ class Scheduler:
         except Exception as e:
             msg = f"Failed: {friendly(e)}"
             level = logging.ERROR
+        warn_below = low_space_bytes(self.svc.storage.settings())
+        if warn_below:
+            try:
+                note = low_space_note(self.svc.client.engine_info().get("FreeSpace"), warn_below)
+            except Exception:
+                note = ""   # the DVR didn't answer; the run's own message already says so
+            if note:
+                msg += " " + note
+                level = max(level, logging.WARNING)
         log.log(level, "Auto-prune %s: %s", when, msg)
         self.svc.storage.save_last_run({"when": when, "summary": msg})
         return msg
