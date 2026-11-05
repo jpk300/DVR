@@ -19,6 +19,7 @@
 
         <activity
             android:name=".MainActivity"
+            android:banner="@drawable/banner"
             android:exported="true"
             android:launchMode="singleTask"
             android:screenOrientation="landscape"
