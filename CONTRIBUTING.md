@@ -2,13 +2,16 @@
 
 ## Workflow
 
-1. **Branch from `main`** for every change. Name the branch after what it does:
+1. **Branch from `firetv`**, the default branch, for every change. Name the branch after what it does:
    `fix/…` for bug fixes, `feat/…` for new features, `refactor/…` for internal changes, `docs/…` for docs.
 2. **Commit in small, focused steps** with descriptive messages (see below).
-3. **Open a pull request** into `main`, even when you're working alone. The PR description is where you
+3. **Open a pull request** into `firetv`, even when you're working alone. The PR description is where you
    record what changed, why, and how you tested it.
 4. **Update `CHANGELOG.md`** under `## [Unreleased]` for anything a user would notice.
 5. **Merge with a merge commit** (`gh pr merge --merge`), then delete the branch.
+
+`main` is the earlier line, without TV mode or the Fire TV app. It isn't updated any more; everything
+goes into `firetv`.
 
 ## Commit messages
 

@@ -2,11 +2,11 @@
 
 A small Fire TV app that shows your DVR Manager server's page full-screen, made to work with the Fire TV remote.
 
-The app is only a screen and a remote. Your **DVR Manager server still does all the work** (keep rules, protection, history, the daily cleanup), so it must be running on your home network. This branch (`firetv`) is `main` plus a **TV mode** for the web page, which the app switches on.
+The app is only a screen and a remote. Your **DVR Manager server still does all the work** (keep rules, protection, history, the daily cleanup), so it must be running on your home network. The server's page has a **TV mode**, which the app switches on. It's on `firetv`, the repository's default branch.
 
-## 1. Run the server from this branch
+## 1. Run the server from the `firetv` branch
 
-TV mode lives on the `firetv` branch, so the server the app talks to must run it. In the folder where you cloned the repo:
+TV mode is on the `firetv` branch, so the server the app talks to must run it. A new clone is already on it. If your server was cloned earlier and is still on `main`, switch it once, in the folder where you cloned the repo:
 
 ```bash
 git fetch
@@ -66,7 +66,7 @@ Everything on the page works from the remote. Typing (search, the DVR address, t
 
 ## Updating the app
 
-Every change to `firetv/` on this branch builds a new APK and replaces the download at the address above. To update, reinstall it with Downloader the same way.
+Every change to `firetv/` on the `firetv` branch builds a new APK and replaces the download at the address above. To update, reinstall it with Downloader the same way.
 
 By default the APK is a **debug build**, signed with a key that changes every build. Android then refuses to install it over the old one, so **uninstall the old version first**: **Settings → Applications → Manage Installed Applications → DVR Manager → Uninstall**. The server address is forgotten, so enter it again.
 
@@ -83,18 +83,16 @@ gh secret set FIRETV_KEY_ALIAS --body dvr
 
 Keep `dvr-firetv.jks` somewhere safe, outside the repo; git ignores `*.jks` here. From the next build on, CI signs with it. Uninstall the debug version once, install the signed one, and later builds install over it.
 
-## Keeping this branch up to date
+## Updating the server
 
-`firetv` is a separate branch, so changes made on `main` reach it only when you merge them in:
+`firetv` is the default branch, so every change lands there. To bring your server up to date:
 
 ```bash
-git switch firetv
 git pull
-git merge main
-git push
+docker compose up -d --build
 ```
 
-Then rebuild the server (`docker compose up -d --build`). The app itself only needs reinstalling when something under `firetv/` changes.
+The app itself only needs reinstalling when something under `firetv/` changes.
 
 ## How it fits together
 

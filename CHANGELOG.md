@@ -7,7 +7,7 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 ## [Unreleased]
 
 ### Added
-- **Fire TV app** (firetv branch): an Android TV app that shows the server's page full-screen, with remote
+- **Fire TV app**: an Android TV app that shows the server's page full-screen, with remote
   support. Back goes to the page first, and Menu changes the server. It is built by GitHub Actions and
   published as the `firetv-latest` pre-release for sideloading with Downloader. See `firetv/README.md`.
 - **TV mode** for the page (`?tv=1`, used by the app): the arrow keys move focus to the nearest control,
@@ -57,6 +57,8 @@ move these entries under a heading like `## [0.1.0] - YYYY-MM-DD`.
 - Keyboard access: sort tabs, show rows and keep-limit cells work with Tab, Enter and Space.
 
 ### Changed
+- `firetv` is now the repository's default branch, and every change goes into it. `main` is the earlier
+  version, without TV mode or the Fire TV app, and is no longer updated.
 - `requests` 2.32.4 and `gunicorn` 23.0.0, the releases with their latest security fixes.
 - `settings.json` is the only source of the DVR address and schedule. `DVR_HOST`, `DVR_STORAGE_URL`, `TZ`
   and `AUTO_PRUNE_*` are copied into it once, on first start, and ignored after that. The Settings tab no

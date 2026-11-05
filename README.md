@@ -108,7 +108,15 @@ Protection is saved in `data/protected.json`, so it survives restarts and rebuil
 
 ## Fire TV app
 
-This branch (`firetv`) adds a Fire TV app that shows this page full-screen and works with the Fire TV remote, plus a TV mode for the page (arrow-key navigation, larger type, a bold focus ring, a top bar that stays in view, and − / + buttons for keep-rule numbers). See [firetv/README.md](firetv/README.md) to install it. The server must run this branch for TV mode to be available.
+A Fire TV app shows this page full-screen and works with the Fire TV remote. It switches on a TV mode for the page: arrow-key navigation, larger type, a bold focus ring, a top bar that stays in view, and − / + buttons for numbers. TV mode only switches on inside the app (or with `?tv=1`), so browsers are unaffected. See [firetv/README.md](firetv/README.md) to install it.
+
+The default branch is `firetv`, which has everything. `main` is the earlier version, without TV mode or the app, and is no longer updated. If your server was cloned before the switch and is still on `main`, move it over once:
+
+```bash
+git fetch
+git switch firetv
+docker compose up -d --build
+```
 
 ## Run without Docker
 
