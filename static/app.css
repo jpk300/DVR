@@ -157,6 +157,9 @@ dialog .help { color: var(--muted); }
                           color: var(--text); text-align: center; }
 .opt input[type=number]:focus { border-color: var(--sel); outline: 0; }
 .opt.disabled { opacity: .5; cursor: default; }
+/* − and + beside the numbers: only in TV mode, where typing a number means the on-screen keyboard */
+.opt .num { display: inline-flex; flex-direction: row; align-items: center; gap: .3rem; vertical-align: middle; }
+.num .step { display: none; }
 
 /* ---------- toasts ---------- */
 #toasts { position: fixed; left: 50%; bottom: 1.2rem; transform: translateX(-50%); z-index: 100;
@@ -252,5 +255,7 @@ html.tv body { font-size: 1rem; padding: 0 1.2vw; }            /* a little room 
 .tv .lock { width: 2.2rem; height: 2.2rem; }
 .tv input[type=checkbox], .tv input[type=radio] { width: 1.25rem; height: 1.25rem; }
 .tv dialog { width: min(34rem, 90vw); padding: 1.3rem; }
+.tv .num .step { display: inline-flex; justify-content: center; min-width: 2.2rem; padding: .25rem .5rem; font-size: 1.1rem; font-weight: 700; }
+.tv .opt input[type=number] { width: 3.4rem; text-align: center; }
 .tv #history-view, .tv #settings-view { max-width: 46rem; }
 .tv #toasts { bottom: 2rem; }

@@ -34,7 +34,32 @@ export function openRuleDialog(s) {
   dlg.returnValue = "";
   dlg.showModal();
   const mode = getMode();
-  (mode === "newest" ? $input("rule-n") : /** @type {HTMLInputElement} */ ([...radios()].find(r => r.value === mode))).focus();
+  const radio = /** @type {HTMLInputElement} */ ([...radios()].find(r => r.value === mode));
+  // with a remote, start on the chosen option; with a keyboard, on its number
+  (mode === "newest" && !isTvMode() ? $input("rule-n") : radio).focus();
+}
+
+const isTvMode = () => document.documentElement.classList.contains("tv");
+
+/** Pick an option. Choosing "keep the newest" with no number yet fills in how many there are now,
+ * so the rule starts out deleting nothing. @param {string} mode */
+function pick(mode) {
+  setMode(mode);
+  const n = $input("rule-n");
+  if (mode === "newest" && !n.value) n.value = String(Math.max(1, ruleShow ? ruleShow.Episodes.length : 1));
+  $("rule-err").hidden = true;
+  updateEffect();
+}
+
+/** The − and + buttons: change the number by one, and choose that number's option.
+ * For "unwatched to keep", going below 1 means blank, which keeps them all. @param {HTMLButtonElement} b */
+function step(b) {
+  const input = $input(b.dataset.for || "");
+  const blankMeansAll = input.id === "rule-nw";
+  const cur = parseInt(input.value, 10);
+  const next = (cur >= 1 ? cur : 0) + Number(b.dataset.step);
+  input.value = next >= 1 ? String(next) : blankMeansAll ? "" : "1";
+  pick(input.id === "rule-n" ? "newest" : "watched");
 }
 
 /** The rule the dialog currently describes. @returns {{rule: Rule | null, error?: undefined} | {error: string, rule?: undefined}} */
@@ -84,17 +109,24 @@ async function saveRule(s, rule) {
 
 export function initRuleDialog() {
   const form = /** @type {HTMLFormElement} */ ($("rule-form"));
-  form.addEventListener("change", updateEffect);
+  form.addEventListener("change", e => {
+    const t = /** @type {HTMLInputElement} */ (e.target);
+    if (t.name === "mode") pick(t.value); else updateEffect();
+  });
   form.addEventListener("input", updateEffect);
-  // typing a number selects its option
-  $input("rule-n").addEventListener("focus", () => { setMode("newest"); updateEffect(); });
-  $input("rule-nw").addEventListener("focus", () => { setMode("watched"); updateEffect(); });
-  // Enter saves (the first button in the form is Cancel, which a plain Enter would press)
+  // clicking or typing in a number selects its option (just moving past it with the remote doesn't)
+  for (const [id, mode] of [["rule-n", "newest"], ["rule-nw", "watched"]]) {
+    for (const ev of ["click", "input"]) $input(id).addEventListener(ev, () => { if (getMode() !== mode) pick(mode); });
+  }
+  for (const b of form.querySelectorAll(".step")) b.addEventListener("click", () => step(/** @type {HTMLButtonElement} */ (b)));
+  // Enter in a number saves (the first button in the form is Cancel, which a plain Enter would
+  // press). Not on the options: with a remote, OK on an option only chooses it.
   form.addEventListener("keydown", e => {
-    if (e.key === "Enter" && /** @type {HTMLElement} */ (e.target).tagName === "INPUT") {
-      e.preventDefault();
-      $button("rule-ok").click();
-    }
+    const t = /** @type {HTMLInputElement} */ (e.target);
+    if (e.key !== "Enter" || t.tagName !== "INPUT" || t.type !== "number") return;
+    e.preventDefault();
+    if (isTvMode()) t.click();   // with a remote, OK on a number opens the keyboard rather than saving
+    else $button("rule-ok").click();
   });
   // save on submit (fires at once; "close" may arrive late), and forget the show on any close
   form.addEventListener("submit", e => {

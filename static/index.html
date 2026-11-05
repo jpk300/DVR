@@ -123,13 +123,13 @@
       </label>
       <label class="opt">
         <input type="radio" name="mode" value="newest">
-        <span><b>Keep the newest <input type="number" id="rule-n" min="1" inputmode="numeric" aria-label="Number of recordings to keep"> recordings</b>
+        <span><b>Keep the newest <span class="num"><button type="button" class="btn step" data-for="rule-n" data-step="-1" aria-label="Keep one fewer">−</button><input type="number" id="rule-n" min="1" inputmode="numeric" aria-label="Number of recordings to keep"><button type="button" class="btn step" data-for="rule-n" data-step="1" aria-label="Keep one more">+</button></span> recordings</b>
           <small>Older recordings are deleted.</small></span>
       </label>
       <label class="opt" id="opt-watched">
         <input type="radio" name="mode" value="watched">
         <span><b>Delete watched episodes</b>
-          <small>Keep <input type="number" id="rule-nw" min="1" inputmode="numeric" placeholder="all" aria-label="Number of unwatched recordings to keep (blank keeps all)"> of the newest unwatched ones (leave blank to keep all).</small>
+          <small>Keep <span class="num"><button type="button" class="btn step" data-for="rule-nw" data-step="-1" aria-label="Keep one fewer">−</button><input type="number" id="rule-nw" min="1" inputmode="numeric" placeholder="all" aria-label="Number of unwatched recordings to keep (blank keeps all)"><button type="button" class="btn step" data-for="rule-nw" data-step="1" aria-label="Keep one more">+</button></span> of the newest unwatched ones (leave blank to keep all).</small>
           <small class="warn" id="watched-note" hidden></small></span>
       </label>
     </fieldset>

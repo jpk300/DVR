@@ -67,6 +67,10 @@ function nearest(from, dir, all) {
   // Left and Right: within an area only along the same line; diagonally only into an area
   // beside this one (the show list next to the panel), never one above or below it
   if (!vertical) {
+    // inside one option of a dialog, Left and Right reach its controls even on the next line
+    const opt = from.closest(".opt");
+    const inOpt = opt && nearestIn(from, dir, all.filter(el => opt.contains(el)), vertical);
+    if (inOpt) return inOpt;
     let outer = from.closest(AREAS);
     while (outer?.parentElement?.closest(AREAS)) outer = outer.parentElement.closest(AREAS);
     if (outer) {
