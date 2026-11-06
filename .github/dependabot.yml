@@ -1,0 +1,13 @@
+# Weekly update PRs for the GitHub Actions used in .github/workflows (they are pinned to commit SHAs).
+# Dependabot reads this file only from the default branch (firetv); the second entry covers main.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: main
+    schedule:
+      interval: weekly
