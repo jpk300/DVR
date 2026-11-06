@@ -14,6 +14,13 @@ on:
 permissions:
   contents: write   # to publish the release
 
+# One run per branch at a time: two pushes close together would otherwise both delete and re-create
+# firetv-latest at once, and one fails. A newer push waits for the running build, then publishes last.
+# Pull requests cancel their older run instead, since they don't publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   apk:
     runs-on: ubuntu-latest   # has the Android SDK preinstalled
